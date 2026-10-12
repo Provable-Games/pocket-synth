@@ -64,4 +64,6 @@ Helper tests need Python 3.9+, Git and Bash and use fake providers; a real Actio
 
 Maintain three guides: README for human usage/API/testing/releases, NOTICE for upstream attribution and concise modifications, and AGENTS for agent commands/constraints/CI setup. CLAUDE only points here. Update the affected guide with code changes; do not create task journals, status ledgers or standalone narrative reports.
 
+Full-mix method, tolerance and setup fingerprints hash raw file bytes, including comments and fixture metadata. Documentation-only cleanup must preserve these inputs. `tests/browser/tolerances.js`, `tests/browser/lib/first-attempt.js` and `tests/fixtures/consumer/waves-setup.json` intentionally retain historical annotations to preserve compatibility with retained captures.
+
 Treat `bower_components/webaudio-controls/webaudio-controls.js` as an unmodified upstream file. To update it, replace it from a specific upstream commit and record that commit and SHA-256 in NOTICE; preserve its license and copyright header. Do not include demo controls in the synth package.

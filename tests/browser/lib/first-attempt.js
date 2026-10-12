@@ -1,5 +1,5 @@
 /*
- * First-attempt verdicts for rendered audio (#78).
+ * First-attempt verdicts for rendered audio (#78, tasks/T13.1.md).
  *
  * The policy: the FIRST render of an item decides the verdict. A note that is
  * missing or too quiet, a large finite transient, a non-finite sample, or a
@@ -184,7 +184,7 @@ function createLog(budget) {
 }
 
 /*
- * Fault injection for regression runs of this policy: the environment variable
+ * Fault injection, for the regression runs of this policy (tasks/T13.1.md §5): the environment variable
  * TINYSYNTH_INJECT_FIRST_ATTEMPT_FAULT=<site>:<kind> corrupts the FIRST attempt of the first item at
  * <site> in each case, once, and nothing else; every re-render is clean. The run must fail, and its
  * diagnostics must show the clean re-render. Sites: held, completed (short-notes), render, repeat

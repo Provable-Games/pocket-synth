@@ -1,5 +1,5 @@
 {
- "about": "Pinned consumer setup for the #26 waveform registry (T11): TinyChip and Beast chip waves in the consumer's WaveDef form and converted for the engine, with presets and drum overrides that use them. Install order (consumer setup contract): construct, setQuality(settings.quality), setMasterVol, setReverbLev, setVoices, register every wave in order, then setTimbre for each timbre. The registered names stand for the consumer's Waveform::Custom(index), index = position in waves.",
+ "about": "Pinned consumer setup for the #26 waveform registry (T11): TinyChip and Beast chip waves in the consumer's WaveDef form and converted per D-006, with presets and drum overrides that use them. Install order (contracts.md, consumer setup contract): construct, setQuality(settings.quality), setMasterVol, setReverbLev, setVoices, register every wave in order, then setTimbre for each timbre. The registered names stand for the consumer's Waveform::Custom(index), index = position in waves.",
  "provenance": {
   "consumer": {
    "repo": "Provable-Games/onchain-tinysynth",
