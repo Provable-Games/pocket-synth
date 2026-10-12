@@ -2,7 +2,31 @@
 
 Supervisor-owned. **On 2026-10-06 supervision passed to a GPT-6.1 Sol supervisor: start with [HANDOVER.md](HANDOVER.md).** After a context reset, read this file, then [contracts.md](contracts.md), then the newest entries of [decisions.md](decisions.md).
 
-## Current policy checkpoint (2026-10-07, D-043)
+## Current release scope (2026-10-12)
+
+This checkpoint supersedes the certification requirements and task order in
+older records below and in HANDOVER.md. The user merged #95, the clean #94
+revert (#99), and app-controlled resume (#98). The release keeps timer-based
+first submission and the 0.2-second horizon; Stop/Play is not lossless pause.
+Applications can suspend/resume a context with `autoResume: false` instead.
+
+At the user's request, #76, #80 and #89 are closed as retired certification
+and qualification work; consumer PR #56 is closed without merging its gate.
+#68's speculative scheduling expansion and the standalone #77/#83
+qualification proposals are also retired. #79 is complete through #95's
+reusable integrity checks. Existing tests, narrow known-failure exceptions and
+first-attempt evidence remain; #91/#96/#97 and concrete engine bugs stay
+tracked. Their deferred investigations do not block this release.
+
+Casey is still tuning the music and will use the published engine as his
+standard player. Focused sound checks belong in normal releases; no formal
+production manifest, certificate or dedicated device lab is required. Final
+work is source/build/package review, obvious low-risk cleanup, and the
+integration-to-main release PR #31. No scheduler redesign, broad refactor,
+new test framework or additional release gate is in scope. The user alone
+merges PRs, signs/pushes the release tag and publishes the GitHub Release.
+
+## Historical policy checkpoint (2026-10-07, D-043)
 
 The user authorized making the documented known failures nonblocking for
 ordinary PR CI while preserving tests, raw failed verdicts and first captures.
@@ -182,8 +206,15 @@ States: `pending`, `running`, `review`, `accepted`, `blocked`.
 
 ## v2.0.0 release checklist (D-037; consumer requests 2026-10-05)
 
-1. **G2 accepted.** Then the user takes #31 out of draft. A human commit or a close/reopen gets its checks to run (T1B §4). The user merges #31 into `main`.
-2. **Release PR.** Create `release/v2.0.0` from `main` and run `npm ci && npm run build`. Commit the min.js and its map, signed, and open a PR. CI requires both files to equal a fresh build. The user squash-merges it.
+1. **Final review.** Review the exact integration source and fresh distribution,
+   finish the small cleanup PR, and take #31 out of draft for hosted reviews.
+   A human-triggered run must validate the bot rebuild commit. After all
+   required checks pass, the user merges #31 into `main`.
+2. **Verify the release commit.** In a clean checkout of that `main` commit,
+   run `npm ci`, `npm run verify` and `npm run pack:check`, and perform focused
+   sound checks. #31 already includes version 2.0.0 and the distribution.
+   Create a separate `release/v2.0.0` PR only if files still need changes;
+   do not open an empty rebuild PR or require a production certificate.
 3. **Tag.** The user signs and pushes it: `git tag -s v2.0.0 <merge sha> && git push origin v2.0.0`.
 4. **Assets.** Attach:
    - `webaudio-tinysynth.min.js`

@@ -10,7 +10,7 @@ This is [g200kg/webaudio-tinysynth](https://github.com/g200kg/webaudio-tinysynth
 - its canvas panel: play/stop, seek bar, volume, note and channel indicators, and MIDI file drag-and-drop;
 - the GUI-only members `width`, `height`, `graph`, `disabledrop`, `perfmon`, `layout`, `toTime` and the pointer and drag handlers.
 
-**Why:** Provable Games stores this synth onchain and embeds it in NFT `animation_url` pages. Those pages only use the JavaScript API, so every byte of GUI code would be paid for in storage. Without it, `webaudio-tinysynth.min.js` drops from 43,217 to 36,804 bytes.
+**Why:** Provable Games stores this synth onchain and embeds it in NFT `animation_url` pages. Those pages only use the JavaScript API, so every byte of GUI code would be paid for in storage. The initial GUI removal reduced `webaudio-tinysynth.min.js` from 43,217 to 36,804 bytes. Later engine improvements change that size; run `npm run size` for the current build.
 
 **What behaves differently:**
 - MIDI tempo is kept fractional. Upstream rounds the BPM down to a whole number (`Math.floor(60000000 / microsecondsPerQuarter)`), so 455,000 µs per quarter note (131.868 BPM) plays at 131 BPM, 0.66% slow.
@@ -23,7 +23,7 @@ This is [g200kg/webaudio-tinysynth](https://github.com/g200kg/webaudio-tinysynth
 
   The error has a `code`, an `offset` (byte offset) and, inside a track, a `track` (0-based track chunk index). A failed load changes nothing: the previous song, playback and channel state are kept. Some irregular files still load, as before: a track without End-of-Track that ends on an event boundary, bytes after End-of-Track, or a header that declares no tracks. So a successful load does not prove a file is strictly valid. Upstream returned silently or loaded what it could read, and some truncated files made it hang.
 
-- Playback no longer hangs or depends on what happened before:
+- Playback avoids non-advancing loops and restores MIDI state on seeks and completed replays:
   - Looping a song that cannot advance, for example with every event on one tick and `loopEnd` unset, plays it once and stops. Upstream hung the page. Each timer callback handles at most 1000 events, and the rest follow in order.
   - A song with no playable events, only tempo or metadata, stays stopped: `playMIDI()` does nothing. Upstream reported `play: 1` forever.
   - `playMIDI()` on a finished song starts a new pass at the song's initial tempo and channel state, as `locateMIDI(0)` does. Upstream replayed the opening at the tempo the song ended on. Notes still sounding from the previous pass are not cut.
@@ -441,9 +441,10 @@ The minified file starts with the source's license header and has no `sourceMapp
 
 On `main`, the minified file and its map change only in a release, made by hand. The steps for the first release, `v2.0.0`, cut once `improve/integration` has been merged into `main`:
 
-1. From `main`, create `release/v2.0.0`. Set the version in `package.json` and `package-lock.json` if it is not already the release's (`npm version 2.0.0 --no-git-tag-version`), run `npm run build`, and commit both generated files.
-2. Open a pull request into `main`; `build-verify` requires both files to equal a fresh build. After it is squash-merged, tag the merge commit and push the tag: `git tag -s v2.0.0 <merge sha>` and `git push origin v2.0.0`.
-3. Run `gh release create v2.0.0 webaudio-tinysynth.min.js webaudio-tinysynth.min.js.map` from a checkout of the tag, with the SHA-256 and sizes from `npm run size` in the notes.
+1. Review the `improve/integration` pull request into `main` after CI has regenerated the distribution. It already carries version 2.0.0 and both generated files; `build-verify` requires them to equal a fresh build. The user merges it. A separate `release/v2.0.0` PR is needed only if the version, source or generated files still need changes.
+2. From a clean checkout of the resulting `main` commit, run `npm ci`, `npm run verify` and `npm run pack:check`. Perform focused sound checks with the current Casey scores. There is no mandatory production-MIDI certificate or separate device-qualification project; ongoing composer listening complements the existing regression checks.
+3. The user signs and pushes the tag: `git tag -s v2.0.0 <reviewed main sha>` and `git push origin v2.0.0`. From a checkout of that tag, create `SHA256SUMS` with `sha256sum webaudio-tinysynth.min.js webaudio-tinysynth.min.js.map > SHA256SUMS`.
+4. The user publishes `gh release create v2.0.0 webaudio-tinysynth.min.js webaudio-tinysynth.min.js.map SHA256SUMS --notes-file <notes>`. Include the behavior summary, tool versions, hashes and sizes from `npm run size`, and the verbatim `npm run verify` output in the notes. Consumers pin the published tag and verify the embedded bytes.
 
 ## License
 

@@ -8,6 +8,16 @@ From the Claude Opus 5.5 supervisor (session `webaudio-tinysynth-a0`) to a GPT-6
 3. the newest entries in [decisions.md](decisions.md): D-036 onward, including D-043;
 4. `/workspace/webaudio-tinysynth-worktrees/_evidence/assignments/CONCURRENCY.md`: rules 1–14 for every agent.
 
+## Current scope override (2026-10-12)
+
+The original handover below is historical. Read the current release checkpoint
+in [status.md](status.md) first: #94 has been cleanly reverted, #98 is merged,
+and the user has retired formal production/device certification (#76/#80/#89)
+and their consumer gate. Preserve concrete bug reports and existing regression
+checks. Finish the integration-to-main review with small, demonstrated fixes,
+publish through the user's merge/tag/release steps, and use Casey's ongoing
+listening for sound feedback. Do not restart the retired qualification work.
+
 ## Goal and the user's priorities
 
 - **The goal:** Casey Wescott's MIDI scores play accurately and consistently on all modern devices, through the onchain player. Quality and consistency come first. Startup speed, size and simplicity come second.
