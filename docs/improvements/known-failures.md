@@ -5,7 +5,7 @@ results, but allow the documented exceptions to be nonblocking in ordinary
 PR CI. These defects remain unresolved. Tests still execute with their
 existing tolerances; diagnostic rerenders cannot replace the first attempt.
 A dedicated diagnosis lab is deferred. [Issue #96](https://github.com/Provable-Games/webaudio-tinysynth/issues/96) is the
-starting brief for the next investigator; [issue #97](https://github.com/Provable-Games/webaudio-tinysynth/issues/97) covers the later program120/drum58 and held-note program119 findings. They contain exact tests, run/artifact
+starting brief for the next investigator; [issue #97](https://github.com/Provable-Games/webaudio-tinysynth/issues/97) covers the later program120/drum58/drum49 and held-note program119 findings. They contain exact tests, run/artifact
 locations, capture hashes, prior analysis and remaining unknowns.
 
 Ordinary core CI explicitly uses `--accept-known-failures`. Local commands
@@ -20,14 +20,31 @@ The strict full-mix qualification mode rejects this option.
 
 | Failure | Accepted ordinary-CI scope | Tracking |
 | --- | --- | --- |
-| Stereo generated-buffer descriptor contradiction | A final `convBuf` descriptor says one channel, while browser and Node capture traces, independent expected dimensions, retained raw bytes and SHA-256 agree on stereo. Only this descriptor discrepancy and its derived checks are excepted. All three engines, quality 0/1, 44.1/48 kHz. | #79 |
+| Stereo generated-buffer descriptor contradiction | A final `convBuf` descriptor says one channel, while browser and Node capture traces, independent expected dimensions, retained raw bytes and SHA-256 agree on stereo. Only this descriptor discrepancy and its derived checks are excepted. All three engines, quality 0/1, 44.1/48 kHz. | #96 |
 | WebKit noisy-program first PCM mismatch | `render q0 44100`: GM121/125; `render q0 48000`: GM127; `short-notes completed min`: q1/program120 or program126 (including both in the same case). Only the named parity/completed-attack assertion and its valid split-measurement layout are excepted. Other programs, fixtures, assertions and malformed evidence remain blocking. | #91 |
 | WebKit drum-54 first PCM mismatch | `render q1 48000`, drum 54 only: both source/min parity and fresh-repeat/source checks, with valid 47-slot split measurements and original WAV pairs. Other drums, rates, qualities, checks and inconsistent capture roles/identity remain blocking. | [#96](https://github.com/Provable-Games/webaudio-tinysynth/issues/96) |
 | WebKit drum-58 first PCM mismatch | `render q0 48000`, drum 58 source/min parity only, valid 47-slot split measurements and its original WAV pair. An approved GM127 failure in the same case is independently validated, including both groups and every WAV pair. Repeat assertions and other drums/settings remain blocking. | [#97](https://github.com/Provable-Games/webaudio-tinysynth/issues/97) |
+| WebKit drum-49 first PCM mismatch | `render q1 44100`, drum 49 source/min parity only, valid 47-slot split measurements and its original WAV pair. Other drums, rates, qualities, repeat checks and corrupt/missing evidence remain blocking. | [#97](https://github.com/Provable-Games/webaudio-tinysynth/issues/97) |
 | WebKit held-note first PCM mismatch | `short-notes held source`, q1/program119 at 0.0700 s only: the pre-note-off/uncut comparison with tolerance `0.0002` of peak. Valid 768-item diagnostic summary and exact comparison reason/detail required. Audibility, finite output, page errors, cleanup and other programs/durations/builds remain blocking. This spec retains JSON, not first-attempt WAVs. | [#97](https://github.com/Provable-Games/webaudio-tinysynth/issues/97) |
 | WebKit full-mix peak overshoot | Historical `ws-mid-default`, q1/48 kHz, first captures. Already outside ordinary PR CI in the manual strict qualification lane; its actual failed/incomplete verdict is retained. | #79, #91 |
 
 ## Retained evidence
+
+- Final-review x64 browser run `38272212207`, unchanged engine at PR head
+  `aa5ef42`, retained WebKit `render q1 44100`, drum49 source/min only:
+  `max |diff| 1.346e-2 at sample 32648`, tolerance `0.000001`. Both original
+  mono WAVs are finite, 70,560 frames. Independent remeasurement confirms
+  max difference 0.013462384697049856 at frame 32786 and the reported first
+  divergence. The diagnostic rerender matched; it does not clear attempt 1.
+  Source WAV SHA-256:
+  `8de3739b39407d3236000b7e8adc8fe5c907a8afccfd59c50603fef7c725b5c5`;
+  min WAV SHA-256:
+  `50eba6c9f0b6b91755086b6108c879e6c30bfccbf3328891ef9b5bc27cebe5f8`.
+  Issue #97 records job/artifact IDs, exact scope and remaining unknowns.
+  Policy v7 adds only this parity scope under the user's standing CI
+  follow-up instruction; v5/v6 belonged to the reverted PR94 policy.
+  The engine, assertions, tolerance and original artifacts are unchanged.
+
 
 - x64 browser run `37680845661`, signed PR head `fa4bfc9`, retained
   `short-notes held source`, q1/program119 at 0.0700 s: `1.11e+0` of peak
@@ -116,8 +133,10 @@ may also be nonblocking until diagnosis removes the exception. Unknown
 checks, required missing/corrupted artifacts, stale provenance, nonfinite
 samples and browser/cleanup/timeout failures still block ordinary CI.
 
-Strict qualification and production/device reports keep their actual
-verdicts; incomplete inputs or references do not become certified. Remove
+Optional strict fixture measurements keep their actual verdicts; incomplete
+inputs or references do not become certified. The owner retired mandatory
+production/device certificates on 2026-10-12; focused sound checks and ongoing
+composer listening are part of normal releases. Remove
 an exception after the lab reproduces its cause, validates the fix against
 retained first failures and fresh captures, and restores its blocking check.
 The user controls merges and release acceptance.

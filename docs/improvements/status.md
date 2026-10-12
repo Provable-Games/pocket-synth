@@ -18,6 +18,17 @@ reusable integrity checks. Existing tests, narrow known-failure exceptions and
 first-attempt evidence remain; #91/#96/#97 and concrete engine bugs stay
 tracked. Their deferred investigations do not block this release.
 
+Final-review CI also retained one WebKit drum49 source/min mismatch at
+quality 1 / 44.1 kHz on the unchanged engine. Issue #97 holds its original
+WAVs, hashes, independent measurements and unknowns. Under the user's
+standing investigate/document/defer instruction, policy v7 makes only that
+comparison nonblocking; assertions, tolerance and other settings remain.
+
+The final hosted review also reproduced a harness-only false pass when an
+opened page context failed to close. The small cleanup records the failed
+check and relaunches the browser; healthy teardown remains unchanged. This
+adds no new qualification gate and changes no engine behavior.
+
 Casey is still tuning the music and will use the published engine as his
 standard player. Focused sound checks belong in normal releases; no formal
 production manifest, certificate or dedicated device lab is required. Final

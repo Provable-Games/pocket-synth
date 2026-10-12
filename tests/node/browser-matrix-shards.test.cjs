@@ -637,6 +637,42 @@ test("--list --shard prints the declared layout without launching a browser", ()
   for (let k = 1; k <= MATRIX.shards; ++k) assert.match(r.out, new RegExp("shard " + k + "/" + MATRIX.shards));
 });
 
+test("case cleanup failures remain failures after browser recovery; healthy cleanup passes", async () => {
+  const { EngineSession } = require("../browser/lib/cases");
+  for (const mode of ["healthy", "reject", "timeout"]) {
+    let launches = 0, oldClosed = false;
+    const context = {
+      newPage: async () => ({ on() {}, close: async () => {} }),
+      close: () => mode === "reject" ? Promise.reject(new Error("mock context close rejection"))
+        : mode === "timeout" ? new Promise(() => {}) : Promise.resolve(),
+    };
+    const session = new EngineSession({ engine: "chromium", log: () => {}, playwright: { chromium: {
+      launch: async () => {
+        const initial = ++launches === 1;
+        let connected = true;
+        return { version: () => "mock", isConnected: () => connected, newContext: async () => context,
+          close: async () => { connected = false; if (initial) oldClosed = true; } };
+      },
+    } } });
+    await session.launch();
+    try {
+      const result = await session.run({ id: mode, spec: "render", kind: "assert", deadline: 1,
+        run: async (t) => { await t.newPage(); t.check("body passed", true); } }, {});
+      assert.equal(result.status, mode === "healthy" ? "pass" : "fail");
+      assert.equal(session.relaunches, mode === "healthy" ? 0 : 1);
+      assert.equal(launches, mode === "healthy" ? 1 : 2);
+      assert.equal(session.fatal, null, "recovery can continue without approving the failed case");
+      if (mode !== "healthy") {
+        assert.equal(oldClosed, true);
+        const failed = result.checks.filter((check) => !check.ok);
+        assert.equal(failed.length, 1);
+        assert.equal(failed[0].name, "every page context the case opened was closed");
+        assert.match(failed[0].detail, mode === "timeout" ? /exceeded 5 s/ : /mock context close rejection/);
+      }
+    } finally { await session.closeBrowser(); }
+  }
+});
+
 test("worker guard accepts an observed declared-override version but stays strict for pinned and blank versions", async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "matrix-worker-version-"));
   const packageDir = path.join(root, "node_modules", "playwright-core");
@@ -1206,27 +1242,46 @@ test("short-notes q1/program126 is accepted without a nonexistent PCM retention 
   assert.match(unlisted.out, /failed check: every program with an attack/);
 });
 
-test("drum58 q0/48 kHz accepts only source/min with retained raw failures and strict-default rejection", () => {
-  const strict = merged((files) => { mutateKnownDrum58Failure(files); });
-  assert.equal(strict.status, 1, strict.out);
-  let rawCase;
-  const accepted = merged((files) => { rawCase = mutateKnownDrum58Failure(files).report; },
-    TEST_REFERENCE_BYTES, null, "core", "core", {}, true);
-  assert.equal(accepted.status, 0, accepted.out);
-  assert.match(accepted.out, /PASS WITH ACCEPTED KNOWN FAILURES/);
-  assert.equal(rawCase.status, "fail");
-  assert.equal(rawCase.checks[0].ok, false);
-  assert.match(accepted.out, /webkit-drum58-q0-48000-first-attempt/);
-  for (const mutate of [
-    (c) => { c.observations[knownFailurePolicy.FAILURE_OBSERVATION].failures[0].item = "gm-drums drum 59 source/min"; },
-    (c) => { c.dims.quality = 1; },
-    (c) => { c.dims.sampleRate = 44100; },
-    (c) => { c.checks[0].name = "gm-drums: a repeat render in a fresh page matches (max |diff| <= 0.000001)"; },
-    (c) => { c.observations.measurements["gm-drums/min"].peaks.pop(); },
+test("approved drum source/min scopes retain raw failures and reject neighboring cases and corrupt captures", () => {
+  for (const { caseId, drum, otherQuality, otherRate, signature } of [
+    { caseId: "render q0 48000", drum: 58, otherQuality: "render q1 48000", otherRate: "render q0 44100", signature: "webkit-drum58-q0-48000-first-attempt" },
+    { caseId: "render q1 44100", drum: 49, otherQuality: "render q0 44100", otherRate: "render q1 48000", signature: "webkit-drum49-q1-44100-first-attempt" },
   ]) {
-    const rejected = merged((files) => { mutate(mutateKnownDrum58Failure(files).report); },
+    const fixture = (files, id = caseId, note = drum) => mutateKnownRenderFailure(files, {
+      descriptor: false, caseId: id, group: knownFailurePolicy.DRUM_GROUP, item: "gm-drums drum " + note + " source/min",
+    });
+    const strict = merged((files) => { fixture(files); });
+    assert.equal(strict.status, 1, strict.out);
+    let rawCase;
+    const accepted = merged((files) => { rawCase = fixture(files).report; },
       TEST_REFERENCE_BYTES, null, "core", "core", {}, true);
-    assert.equal(rejected.status, 1, rejected.out);
+    assert.equal(accepted.status, 0, accepted.out);
+    assert.match(accepted.out, /PASS WITH ACCEPTED KNOWN FAILURES/);
+    assert.equal(rawCase.status, "fail");
+    assert.equal(rawCase.checks[0].ok, false);
+    assert.ok(accepted.out.includes(signature), accepted.out);
+    for (const [id, note] of [[caseId, drum + 1], [otherQuality, drum], [otherRate, drum]]) {
+      const rejected = merged((files) => { fixture(files, id, note); },
+        TEST_REFERENCE_BYTES, null, "core", "core", {}, true);
+      assert.equal(rejected.status, 1, rejected.out);
+    }
+    for (const mutate of [
+      (c) => { c.checks[0].name = "gm-drums: a repeat render in a fresh page matches (max |diff| <= 0.000001)"; },
+      (c) => { c.observations.measurements["gm-drums/min"].peaks.pop(); },
+    ]) {
+      const rejected = merged((files) => { mutate(fixture(files).report); },
+        TEST_REFERENCE_BYTES, null, "core", "core", {}, true);
+      assert.equal(rejected.status, 1, rejected.out);
+    }
+    let wavPath;
+    const corrupted = merged((files) => { wavPath = fixture(files).wavPaths[1]; },
+      TEST_REFERENCE_BYTES, (dir) => {
+        const file = path.join(dir, wavPath), bytes = fs.readFileSync(file);
+        bytes[44] ^= 1;
+        fs.writeFileSync(file, bytes);
+      }, "core", "core", {}, true);
+    assert.equal(corrupted.status, 1, corrupted.out);
+    assert.match(corrupted.out, /known first-attempt PCM WAV is missing or invalid/);
   }
 });
 
