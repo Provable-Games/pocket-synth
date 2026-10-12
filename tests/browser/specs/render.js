@@ -682,6 +682,7 @@ function cases(shared) {
           const unknownRejections = [];
           const measurements = {};
           const hashes = {};
+          const sourcePcmHashes = {};
           const buffers = {};
           let generatedBufferSha256 = null;
           const sameEngine = { bitIdentical: [], differing: {} };
@@ -815,6 +816,7 @@ function cases(shared) {
               measurements[s.name + (parity ? "" : "/" + build)] = s.gm ? rawGmMeasurements(m.slots) : m;
             }
             hashes[s.name] = res.source.map((r) => r.hash);
+            if (s.name === "gm-drums") sourcePcmHashes[s.name] = parts.source[0].map((r) => planarFloat32Sha256(r.channels));
             buffers[s.name] = res.source[0].buffers;
             if (["pitch-sine", "gm-drums", "reverb"].includes(s.name)) kept[s.name] = { parts: parts.source[0], combined: res.source[0] };
           }
@@ -858,6 +860,7 @@ function cases(shared) {
           t.observe("first-attempt same-engine failures and their diagnostic re-renders (the verdict is the first attempt's; a clean re-render does not clear it)", Object.assign({ firstAttemptRenders: renders, diagnosticRenders: diagRenders }, diag.summary()));
           t.observe("measurements", measurements);
           t.observe("render hashes (source build)", hashes);
+          t.observe("first-source planar PCM SHA-256", sourcePcmHashes);
           t.observe("legacy generated buffer hashes (16-hex cyrb53, pitch-sine with useReverb 0)", buffers[SCENARIOS[0].name]);
           t.observe("generated buffer SHA-256 (first reverb-enabled attempt)", generatedBufferSha256);
         },

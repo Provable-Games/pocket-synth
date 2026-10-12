@@ -25,7 +25,7 @@ The strict full-mix qualification mode rejects this option.
 | WebKit drum-54 first PCM mismatch | `render q1 48000`, drum 54 only: both source/min parity and fresh-repeat/source checks, with valid 47-slot split measurements and original WAV pairs. Other drums, rates, qualities, checks and inconsistent capture roles/identity remain blocking. | [#96](https://github.com/Provable-Games/webaudio-tinysynth/issues/96) |
 | WebKit drum-58 first PCM mismatch | `render q0 48000`, drum 58 source/min parity only, valid 47-slot split measurements and its original WAV pair. An approved GM127 failure in the same case is independently validated, including both groups and every WAV pair. Repeat assertions and other drums/settings remain blocking. | [#97](https://github.com/Provable-Games/webaudio-tinysynth/issues/97) |
 | WebKit drum-49 first PCM mismatch | `render q1 44100`, drum 49 source/min parity only, valid 47-slot split measurements and its original WAV pair. Other drums, rates, qualities, repeat checks and corrupt/missing evidence remain blocking. | [#97](https://github.com/Provable-Games/webaudio-tinysynth/issues/97) |
-| WebKit drum-53 first repeat mismatch | `render q0 48000`, drum 53 fresh-repeat/kept-source only, valid 47-slot measurements and its original WAV pair. Passing source/min measurements remain in cross-engine checks. Parity failures for drum53, other drums/settings, and malformed evidence remain blocking. | [#97](https://github.com/Provable-Games/webaudio-tinysynth/issues/97) |
+| WebKit drum-53 first repeat mismatch | `render q0 48000`, drum 53 fresh-repeat/kept-source only, valid unified 47-slot measurements and its original WAV pair bound to the separately recorded first-source PCM SHA-256. Split measurements require an independently approved same-group parity failure. Passing source/min measurements remain in cross-engine checks. Parity failures for drum53, other drums/settings, and malformed evidence remain blocking. | [#97](https://github.com/Provable-Games/webaudio-tinysynth/issues/97) |
 | WebKit held-note first PCM mismatch | `short-notes held source`, q1/program119 at 0.0700 s only: the pre-note-off/uncut comparison with tolerance `0.0002` of peak. Valid 768-item diagnostic summary and exact comparison reason/detail required. Audibility, finite output, page errors, cleanup and other programs/durations/builds remain blocking. This spec retains JSON, not first-attempt WAVs. | [#97](https://github.com/Provable-Games/webaudio-tinysynth/issues/97) |
 | WebKit full-mix peak overshoot | Historical `ws-mid-default`, q1/48 kHz, first captures. Already outside ordinary PR CI in the manual strict qualification lane; its actual failed/incomplete verdict is retained. | #79, #91 |
 
@@ -44,9 +44,15 @@ The strict full-mix qualification mode rejects this option.
   kept-source WAV SHA-256:
   `25354706978c739207f65f2f8258d6bbe329e1d736870d6867cdc11bf424332f`.
   Issue #97 records exact job/artifact identifiers and remaining unknowns.
-  Policy v8 adds only this repeat scope under the user's standing
-  investigate/document/defer instruction. Original checks, tolerances,
-  raw artifact validation and passing parity measurements remain.
+  Policy v8 added only this repeat scope under the user's standing
+  investigate/document/defer instruction. Policy v9 additionally binds
+  the kept source to a checksum recorded from the existing first-source
+  PCM and requires unified measurements unless an approved same-group
+  parity failure requires split rows. The original capture predates the
+  new identity observation, so v9 rejects it for automatic acceptance;
+  its failed comparison and evidence remain useful for investigation.
+  Original checks, tolerances, raw artifact validation and passing parity
+  measurements remain. This adds no renders or separate diagnostic tool.
 
 - Final-review x64 browser run `38272212207`, unchanged engine at PR head
   `aa5ef42`, retained WebKit `render q1 44100`, drum49 source/min only:

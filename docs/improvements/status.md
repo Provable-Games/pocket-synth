@@ -22,9 +22,11 @@ Final-review CI also retained WebKit drum49 source/min at quality 1 /
 44.1 kHz and drum53 repeat/kept-source at quality 0 / 48 kHz mismatches on
 the unchanged engine. Issue #97 holds their original WAVs, hashes,
 independent measurements and unknowns. Under the user's standing
-investigate/document/defer instruction, policy v8 makes only those exact
+investigate/document/defer instruction, policy v9 makes only those exact
 comparisons nonblocking; assertions, tolerance and other settings remain.
-Drum53 source/min parity passed and remains in cross-engine checks.
+Drum53 source/min parity passed and remains in cross-engine checks. Its
+exception now also requires the separately recorded first-source PCM
+checksum and rejects a split layout without an approved parity failure.
 
 The final hosted review also reproduced a harness-only false pass when an
 opened page context failed to close. The small cleanup records the failed

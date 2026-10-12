@@ -1066,6 +1066,13 @@ function firstAttemptPcmArtifactProblems(engine, rel, resultFile, c, classificat
     }
     if (sides.length === 2) {
       captures.set(failure.item, sides);
+      if (failure.item === "gm-drums drum 53 repeat") {
+        const sourceHashes = c.observations && c.observations["first-source planar PCM SHA-256"];
+        const hashes = sourceHashes && sourceHashes[group];
+        if (!Array.isArray(hashes) || hashes.length !== scenario.items.length ||
+            hashes[scenario.items.indexOf(fixture)] !== sides[1].side.planarPcmSha256)
+          add("retained drum-53 repeat does not compare against the recorded first source capture");
+      }
       const [source, min] = sides;
       if (source.side.frames !== min.side.frames || source.side.sampleRate !== min.side.sampleRate || source.side.channels !== min.side.channels) {
         add("known source/min first-attempt PCM WAV dimensions differ for " + failure.item);
