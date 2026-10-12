@@ -41,7 +41,7 @@ Treat `bower_components/webaudio-controls/webaudio-controls.js` as an unmodified
 
 ## AI-review CI setup and maintenance
 
-This section applies to agents working on AI-review infrastructure. Human administrators configure branch rulesets to require `Codex review gate` and `Claude review gate`, and supply the Actions variables and secrets below (repository values override organization values). Agents and helpers never change rulesets or secrets. There are no model/effort defaults:
+This section applies to agents working on AI-review infrastructure. Human administrators configure branch rulesets to require `Codex review gate` and `Claude review gate`, and supply the Actions variables and secrets below (repository values override organization values). Ruleset and secret configuration is an administrator task; review helpers do not change them. There are no model/effort defaults:
 
 | Name | Kind | Purpose |
 | --- | --- | --- |
