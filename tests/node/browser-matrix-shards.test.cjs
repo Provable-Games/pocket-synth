@@ -980,8 +980,9 @@ function mutateKnownRenderFailure(files, { descriptor = true, caseId = "render q
   const minPlanar = Buffer.from(minSamples.buffer, minSamples.byteOffset, minSamples.byteLength);
   const wavs = { a: testAnalysis.wav([samples], sampleRate), b: testAnalysis.wav([minSamples], sampleRate) };
   const pairBase = "first-attempt-pcm/q" + c.dims.quality + "-" + sampleRate + "/pair-" + String(pairIndex).padStart(3, "0");
+  const repeat = item.endsWith(" repeat"), roles = repeat ? { a: "repeat", b: "kept source" } : { a: "source", b: "min" };
   const sides = {};
-  for (const [key, role, suffix] of [["a", "source", "first-a.wav"], ["b", "min", "first-b.wav"]]) {
+  for (const [key, role, suffix] of [["a", roles.a, "first-a.wav"], ["b", roles.b, "first-b.wav"]]) {
     const file = pairBase + "-" + suffix;
     ATTACHMENTS.set(path.posix.join(root, "browser-matrix", "webkit", file), wavs[key]);
     const planar = key === "a" ? sourcePlanar : minPlanar;
@@ -994,7 +995,7 @@ function mutateKnownRenderFailure(files, { descriptor = true, caseId = "render q
   const pcmRetention = {
     schemaVersion: 1, pairIndex, label: item,
     planarPcmEncoding: "IEEE-754 binary32 little-endian; planar channel order",
-    roles: { a: "source", b: "min" }, saved: true, status: "saved", a: sides.a, b: sides.b,
+    roles, saved: true, status: "saved", a: sides.a, b: sides.b,
   };
   const outcome = {
     item,
@@ -1011,10 +1012,13 @@ function mutateKnownRenderFailure(files, { descriptor = true, caseId = "render q
   c.observations[knownFailurePolicy.FAILURE_OBSERVATION] = summary;
   const measurements = c.observations.measurements;
   const row = measurements[group];
-  delete measurements[group];
-  measurements[group + "/source"] = structuredClone(row);
-  measurements[group + "/min"] = structuredClone(row);
-  const groupCheck = group + ": min renders the same PCM as source (max |diff| <= " + String(tolerance) + ")";
+  if (!repeat) {
+    delete measurements[group];
+    measurements[group + "/source"] = structuredClone(row);
+    measurements[group + "/min"] = structuredClone(row);
+  }
+  const groupCheck = group + (repeat ? ": a repeat render in a fresh page matches" : ": min renders the same PCM as source") +
+    " (max |diff| <= " + String(tolerance) + ")";
   c.checks = [
     { name: knownFailurePolicy.BUFFER_CHECK, ok: false, detail: "synthetic final convBuf channel metadata contradiction" },
     { name: knownFailurePolicy.SEED_CHECK, ok: false, detail: "generated-buffer integrity prerequisite failed" },
@@ -1242,13 +1246,14 @@ test("short-notes q1/program126 is accepted without a nonexistent PCM retention 
   assert.match(unlisted.out, /failed check: every program with an attack/);
 });
 
-test("approved drum source/min scopes retain raw failures and reject neighboring cases and corrupt captures", () => {
-  for (const { caseId, drum, otherQuality, otherRate, signature } of [
-    { caseId: "render q0 48000", drum: 58, otherQuality: "render q1 48000", otherRate: "render q0 44100", signature: "webkit-drum58-q0-48000-first-attempt" },
-    { caseId: "render q1 44100", drum: 49, otherQuality: "render q0 44100", otherRate: "render q1 48000", signature: "webkit-drum49-q1-44100-first-attempt" },
+test("approved drum scopes retain raw failures and reject neighboring cases and corrupt captures", () => {
+  for (const { caseId, drum, suffix, otherQuality, otherRate, signature } of [
+    { caseId: "render q0 48000", drum: 58, suffix: "source/min", otherQuality: "render q1 48000", otherRate: "render q0 44100", signature: "webkit-drum58-q0-48000-first-attempt" },
+    { caseId: "render q1 44100", drum: 49, suffix: "source/min", otherQuality: "render q0 44100", otherRate: "render q1 48000", signature: "webkit-drum49-q1-44100-first-attempt" },
+    { caseId: "render q0 48000", drum: 53, suffix: "repeat", otherQuality: "render q1 48000", otherRate: "render q0 44100", signature: "webkit-drum53-q0-48000-repeat-first-attempt" },
   ]) {
     const fixture = (files, id = caseId, note = drum) => mutateKnownRenderFailure(files, {
-      descriptor: false, caseId: id, group: knownFailurePolicy.DRUM_GROUP, item: "gm-drums drum " + note + " source/min",
+      descriptor: false, caseId: id, group: knownFailurePolicy.DRUM_GROUP, item: "gm-drums drum " + note + " " + suffix,
     });
     const strict = merged((files) => { fixture(files); });
     assert.equal(strict.status, 1, strict.out);
@@ -1260,14 +1265,18 @@ test("approved drum source/min scopes retain raw failures and reject neighboring
     assert.equal(rawCase.status, "fail");
     assert.equal(rawCase.checks[0].ok, false);
     assert.ok(accepted.out.includes(signature), accepted.out);
+    if (suffix === "repeat") {
+      assert.ok(rawCase.observations.measurements["gm-drums"], "passing parity measurements remain unified");
+      assert.equal(knownFailurePolicy.classifyKnownCase("webkit", rawCase).failures[0].splitMeasurementGroup, undefined);
+    }
     for (const [id, note] of [[caseId, drum + 1], [otherQuality, drum], [otherRate, drum]]) {
       const rejected = merged((files) => { fixture(files, id, note); },
         TEST_REFERENCE_BYTES, null, "core", "core", {}, true);
       assert.equal(rejected.status, 1, rejected.out);
     }
     for (const mutate of [
-      (c) => { c.checks[0].name = "gm-drums: a repeat render in a fresh page matches (max |diff| <= 0.000001)"; },
-      (c) => { c.observations.measurements["gm-drums/min"].peaks.pop(); },
+      (c) => { c.checks[0].name = suffix === "repeat" ? "gm-drums: min renders the same PCM as source (max |diff| <= 0.000001)" : "gm-drums: a repeat render in a fresh page matches (max |diff| <= 0.000001)"; },
+      (c) => { c.observations.measurements[suffix === "repeat" ? "gm-drums" : "gm-drums/min"].peaks.pop(); },
     ]) {
       const rejected = merged((files) => { mutate(fixture(files).report); },
         TEST_REFERENCE_BYTES, null, "core", "core", {}, true);

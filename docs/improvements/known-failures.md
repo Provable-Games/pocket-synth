@@ -5,7 +5,7 @@ results, but allow the documented exceptions to be nonblocking in ordinary
 PR CI. These defects remain unresolved. Tests still execute with their
 existing tolerances; diagnostic rerenders cannot replace the first attempt.
 A dedicated diagnosis lab is deferred. [Issue #96](https://github.com/Provable-Games/webaudio-tinysynth/issues/96) is the
-starting brief for the next investigator; [issue #97](https://github.com/Provable-Games/webaudio-tinysynth/issues/97) covers the later program120/drum58/drum49 and held-note program119 findings. They contain exact tests, run/artifact
+starting brief for the next investigator; [issue #97](https://github.com/Provable-Games/webaudio-tinysynth/issues/97) covers the later program120/drum58/drum49/drum53 and held-note program119 findings. They contain exact tests, run/artifact
 locations, capture hashes, prior analysis and remaining unknowns.
 
 Ordinary core CI explicitly uses `--accept-known-failures`. Local commands
@@ -25,10 +25,28 @@ The strict full-mix qualification mode rejects this option.
 | WebKit drum-54 first PCM mismatch | `render q1 48000`, drum 54 only: both source/min parity and fresh-repeat/source checks, with valid 47-slot split measurements and original WAV pairs. Other drums, rates, qualities, checks and inconsistent capture roles/identity remain blocking. | [#96](https://github.com/Provable-Games/webaudio-tinysynth/issues/96) |
 | WebKit drum-58 first PCM mismatch | `render q0 48000`, drum 58 source/min parity only, valid 47-slot split measurements and its original WAV pair. An approved GM127 failure in the same case is independently validated, including both groups and every WAV pair. Repeat assertions and other drums/settings remain blocking. | [#97](https://github.com/Provable-Games/webaudio-tinysynth/issues/97) |
 | WebKit drum-49 first PCM mismatch | `render q1 44100`, drum 49 source/min parity only, valid 47-slot split measurements and its original WAV pair. Other drums, rates, qualities, repeat checks and corrupt/missing evidence remain blocking. | [#97](https://github.com/Provable-Games/webaudio-tinysynth/issues/97) |
+| WebKit drum-53 first repeat mismatch | `render q0 48000`, drum 53 fresh-repeat/kept-source only, valid 47-slot measurements and its original WAV pair. Passing source/min measurements remain in cross-engine checks. Parity failures for drum53, other drums/settings, and malformed evidence remain blocking. | [#97](https://github.com/Provable-Games/webaudio-tinysynth/issues/97) |
 | WebKit held-note first PCM mismatch | `short-notes held source`, q1/program119 at 0.0700 s only: the pre-note-off/uncut comparison with tolerance `0.0002` of peak. Valid 768-item diagnostic summary and exact comparison reason/detail required. Audibility, finite output, page errors, cleanup and other programs/durations/builds remain blocking. This spec retains JSON, not first-attempt WAVs. | [#97](https://github.com/Provable-Games/webaudio-tinysynth/issues/97) |
 | WebKit full-mix peak overshoot | Historical `ws-mid-default`, q1/48 kHz, first captures. Already outside ordinary PR CI in the manual strict qualification lane; its actual failed/incomplete verdict is retained. | #79, #91 |
 
 ## Retained evidence
+
+- Final-review x64 browser run `38276286943`, unchanged engine at PR head
+  `8d71f28`, retained WebKit `render q0 48000`, drum53 repeat/kept-source
+  only: `max |diff| 2.717e-2 at sample 24352`, tolerance `0.000001`.
+  Source/min parity passed and its 47-slot measurements remain unified.
+  Both originals are finite mono Float32, 76,800 frames; independent
+  remeasurement confirms max difference 0.027165832929313183 at frame
+  24735 and first divergence 24352. No isolated 128-frame zero block was
+  found. The diagnostic rerender matched; it does not clear attempt 1.
+  Repeat WAV SHA-256:
+  `a58a4f5c6906f5e9a5592e9a1a4c0f4783a19e3cf55fa136f55cc8030a508452`;
+  kept-source WAV SHA-256:
+  `25354706978c739207f65f2f8258d6bbe329e1d736870d6867cdc11bf424332f`.
+  Issue #97 records exact job/artifact identifiers and remaining unknowns.
+  Policy v8 adds only this repeat scope under the user's standing
+  investigate/document/defer instruction. Original checks, tolerances,
+  raw artifact validation and passing parity measurements remain.
 
 - Final-review x64 browser run `38272212207`, unchanged engine at PR head
   `aa5ef42`, retained WebKit `render q1 44100`, drum49 source/min only:

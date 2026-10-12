@@ -18,11 +18,13 @@ reusable integrity checks. Existing tests, narrow known-failure exceptions and
 first-attempt evidence remain; #91/#96/#97 and concrete engine bugs stay
 tracked. Their deferred investigations do not block this release.
 
-Final-review CI also retained one WebKit drum49 source/min mismatch at
-quality 1 / 44.1 kHz on the unchanged engine. Issue #97 holds its original
-WAVs, hashes, independent measurements and unknowns. Under the user's
-standing investigate/document/defer instruction, policy v7 makes only that
-comparison nonblocking; assertions, tolerance and other settings remain.
+Final-review CI also retained WebKit drum49 source/min at quality 1 /
+44.1 kHz and drum53 repeat/kept-source at quality 0 / 48 kHz mismatches on
+the unchanged engine. Issue #97 holds their original WAVs, hashes,
+independent measurements and unknowns. Under the user's standing
+investigate/document/defer instruction, policy v8 makes only those exact
+comparisons nonblocking; assertions, tolerance and other settings remain.
+Drum53 source/min parity passed and remains in cross-engine checks.
 
 The final hosted review also reproduced a harness-only false pass when an
 opened page context failed to close. The small cleanup records the failed

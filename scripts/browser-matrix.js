@@ -999,13 +999,13 @@ function parseFloatFirstAttemptWav(bytes, expectedSampleRate, expectedChannels, 
 
 function firstAttemptPcmArtifactProblems(engine, rel, resultFile, c, classification) {
   const noises = c && c.spec === "render" && classification
-    ? classification.failures.filter((failure) => failure.splitMeasurementGroup) : [];
+    ? classification.failures.filter((failure) => failure.measurementGroup) : [];
   if (!noises.length) return [];
   const problems = [], seenPairs = new Set(), captures = new Map();
   const add = (message) => problems.push(rel + ": " + engine + " / " + c.id + " " + message);
   if (!resultFile) return [rel + ": " + engine + " / " + c.id + " known render exception requires retained first-attempt PCM WAVs"];
   for (const { failure, group } of noises.flatMap((noise) => noise.firstAttemptFailures.map((failure) =>
-    ({ failure, group: noise.splitMeasurementGroup })))) {
+    ({ failure, group: noise.measurementGroup })))) {
     const scenario = SCENARIOS.find((item) => item.name === group);
     const repeat = failure.item.endsWith(" repeat");
     const roles = repeat ? { a: "repeat", b: "kept source" } : { a: "source", b: "min" };
