@@ -1,6 +1,6 @@
 /*
  * Rendered-audio tolerances for the browser matrix, declared from measured
- * evidence (docs/improvements/tasks/T6.md, "Tolerances"). Measured on
+ * render and variation evidence. Measured on
  * linux-x64 with Chromium 153.0.8010.12, Firefox 155.0 and WebKit 26.6
  * (Playwright 1.63.0): four full render runs (2 quality modes x 2 sample
  * rates x 2 builds each) and the variation spec (three separate launches,

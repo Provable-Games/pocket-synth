@@ -21,6 +21,7 @@ ROOT = SCRIPTS.parents[1]
 WORKFLOWS = ROOT / ".github" / "workflows"
 sys.path.insert(0, str(SCRIPTS))
 import review_lib as lib  # noqa: E402
+import review  # noqa: E402
 
 REPO = "owner/tinysynth"
 # The workflows' guard for a title or body edit that did not change the base.
@@ -151,7 +152,7 @@ class OutputContractTests(unittest.TestCase):
                 self.assertTrue(record["evidence"] and record["impact"] and record["action"])
 
     def test_policy_template_parses_as_a_finding(self):
-        policy = (ROOT / CONFIG["policy_file"]).read_text()
+        policy = review.REVIEW_POLICY
         start = policy.index("### [SEVERITY]")
         template = policy[start:policy.index("\n\n", start)]
         parsed = lib.parse_review(template.replace("[SEVERITY]", "[LOW]"))
@@ -241,7 +242,7 @@ class SettingsTests(Workspace):
 
     def test_no_defaults_or_vocabulary_outside_central_configuration(self):
         for path in [SCRIPTS / "review.py", SCRIPTS / "review_lib.py", SCRIPTS / "run-codex-review.sh",
-                     *WORKFLOWS.glob("*review*.yml"), *(ROOT / ".github" / "prompts").glob("*.md")]:
+                     *WORKFLOWS.glob("*review*.yml")]:
             text = path.read_text()
             with self.subTest(path=path.name):
                 self.assertNotRegex(text, r"\bxhigh\b")
@@ -457,8 +458,8 @@ class PromptTests(Workspace):
                                     "--config-sha", base, "--bootstrap", "false", check=True)
             prompt = (out / "prompt.txt").read_text()
             prompts[provider] = prompt
-            policy = (ROOT / CONFIG["policy_file"]).read_text().rstrip()
-            role = (ROOT / CONFIG["agents"][0]["prompt_file"]).read_text().rstrip()
+            policy = review.REVIEW_POLICY.rstrip()
+            role = review.TINYSYNTH_REVIEW_ROLE
             self.assertTrue(prompt.startswith(policy))
             self.assertEqual(prompt.count(policy), 1)
             self.assertEqual(prompt.count(role), 1)
@@ -1099,9 +1100,7 @@ class CommentTests(unittest.TestCase):
 class ConfigurationTests(Workspace):
     def copy_config(self, mutate):
         root = self.dir / f"config-{len(list(self.dir.glob('config-*')))}"
-        (root / ".github" / "prompts").mkdir(parents=True)
-        for name in ("review-policy.md", "tinysynth-review.md"):
-            (root / ".github" / "prompts" / name).write_text("x\n")
+        (root / ".github").mkdir(parents=True)
         config = json.loads((ROOT / ".github" / "review-agents.json").read_text())
         mutate(config)
         (root / ".github" / "review-agents.json").write_text(json.dumps(config))
@@ -1110,7 +1109,10 @@ class ConfigurationTests(Workspace):
     def test_invalid_configurations_are_rejected(self):
         mutations = {
             "duplicate agent": lambda c: c["agents"].append(dict(c["agents"][0])),
-            "prompt outside prompts": lambda c: c["agents"][0].update(prompt_file=".github/prompts/../x.md"),
+            "legacy schema": lambda c: c.update(schema_version=1),
+            "legacy policy file": lambda c: c.update(policy_file=".github/prompts/review-policy.md"),
+            "legacy prompt file": lambda c: c["agents"][0].update(prompt_file=".github/prompts/tinysynth-review.md"),
+            "unsupported role": lambda c: c["agents"][0].update(agent_id="other"),
             "unknown blocking severity": lambda c: c.update(blocking_severities=["SEVERE"]),
             "missing provider": lambda c: c["providers"].pop("claude"),
             "bad variable name": lambda c: c["providers"]["codex"].update(model_variable="lower case"),
@@ -1122,6 +1124,10 @@ class ConfigurationTests(Workspace):
     def test_repository_configuration_is_valid(self):
         self.assertEqual([a["agent_id"] for a in CONFIG["agents"]], ["tinysynth"])
         self.assertEqual(CONFIG["agents"][0]["diff_paths"], ["."])
+        self.assertNotIn("policy_file", CONFIG)
+        self.assertNotIn("prompt_file", CONFIG["agents"][0])
+        # Configuration remains usable when no standalone prompt files exist.
+        self.assertEqual(lib.load_config(self.copy_config(lambda c: None)), CONFIG)
 
 
 class ClaudeFailureDiagnosticTests(Workspace):
@@ -1397,6 +1403,37 @@ class TrustedScriptTests(Workspace):
         self.assertEqual(values, {"config_sha": base, "bootstrap": "false"})
         for workflow in ("codex-review.yml", "claude-review.yml"):
             self.assertIn("BOOTSTRAP_BASE_BRANCHES: main\n", (WORKFLOWS / workflow).read_text())
+
+    def test_sparse_checkout_keeps_legacy_base_prompt_inputs(self):
+        # A PR's workflow runs against BASE helpers, which may still use schema 1.
+        legacy = {"schema_version": 1, "policy_file": ".github/prompts/review-policy.md",
+                  "agents": [{"prompt_file": ".github/prompts/tinysynth-review.md"}]}
+        files = {".github/review-agents.json": json.dumps(legacy),
+                 legacy["policy_file"]: "Trusted base policy\n",
+                 legacy["agents"][0]["prompt_file"]: "Trusted base role\n",
+                 ".github/scripts/review.py": "# Legacy helper\n"}
+        repo, base, _ = self.make_repo(
+            files, {".github/review-agents.json": json.dumps(CONFIG)},
+            deleted=[legacy["policy_file"], legacy["agents"][0]["prompt_file"]])
+        patterns = set()
+        for workflow in ("codex-review.yml", "claude-review.yml"):
+            text = (WORKFLOWS / workflow).read_text()
+            blocks = re.findall(r"sparse-checkout: \|\n((?: +[^\n]+\n)+?)"
+                                r" +sparse-checkout-cone-mode: false", text)
+            self.assertEqual(len(blocks), 4, workflow)
+            patterns.update(textwrap.dedent(block) for block in blocks)
+        self.assertEqual(len(patterns), 1)
+        staged = self.dir / "staged-base"
+        self.git(repo, "clone", "-q", "--no-checkout", str(repo), str(staged))
+        self.git(staged, "sparse-checkout", "init", "--no-cone")
+        subprocess.run(["git", "-C", str(staged), "sparse-checkout", "set", "--stdin"],
+                       input=patterns.pop(), text=True, capture_output=True, check=True,
+                       env=self.base_env)
+        self.git(staged, "checkout", "-q", base)
+        config = json.loads((staged / ".github/review-agents.json").read_text())
+        self.assertEqual((staged / config["policy_file"]).read_text(), "Trusted base policy\n")
+        self.assertEqual((staged / config["agents"][0]["prompt_file"]).read_text(), "Trusted base role\n")
+        self.assertTrue((staged / ".github/scripts/review.py").is_file())
 
     def test_trusted_configuration_is_fingerprinted_and_verified(self):
         snippets = {w: self.snippet(w, "trusted-fingerprint") for w in ("codex-review.yml", "claude-review.yml")}

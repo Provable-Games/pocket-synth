@@ -7,7 +7,7 @@
  * the song, maxTick, play status and the WebAudio calls made by loadMIDI must
  * be identical, also when the load replaces a playing song.
  *
- * The documented differences (tasks/T2.md, ledger L-01 to L-03) are pinned
+ * The parsing compatibility differences are pinned
  * against the same reference. Reference loads run under a vm timeout; none of
  * these inputs made the baseline parser hang.
  */

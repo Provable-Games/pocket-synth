@@ -1,5 +1,5 @@
 /*
- * T5.2 (#13 follow-up, tasks/T5.2.md) in plain Node, for both builds.
+ * Float32 input guards (#13 follow-up) in plain Node, for both builds.
  *
  *   - loadMIDIUrl() with an opts.signal getter that throws: the build runs in
  *     a child process loaded with require(), so its promises are real Node

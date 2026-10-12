@@ -1,5 +1,5 @@
 /*
- * Short notes (#59, D-039, ledger L-15; tasks/T13.md and T6 §18.5) in real engines, for both
+ * Short notes (#59) in real engines, for both
  * builds. A note released before an operator's attack ends: that operator ramps on to its own
  * value v (T - t) / a at the note-off T and is released from there. Upstream cancelled the whole
  * ramp, so the operator stayed silent until T, and set every operator from the last operator's
@@ -18,8 +18,7 @@
  *     note-off from output time T on);
  *   - every render is finite (no NaN or Infinity), in every case below too.
  *   The first render of an item decides (#78, lib/first-attempt.js). WebKit occasionally renders
- *   one segment of a render differently (tasks/T6.md, "WebKit's occasional render differences";
- *   tasks/T13.1.md measures it): "held min" failed that way on PR #60 (q0, program 126, 0.07 s,
+ *   one segment of a render differently: "held min" failed that way on PR #60 (q0, program 126, 0.07 s,
  *   1.47 of the peak) and passed on re-run. A note that is missing or too quiet, a large finite
  *   transient or a non-finite sample in a first render fails the run, and a clean re-render does not
  *   clear it, because an intermittent defect is not disproved by a clean render. Held and
@@ -39,7 +38,7 @@
  *     (quality 0), with 0.5 s notes, sound until T and render as the same note-off scheduled
  *     before the render, within PREROLL of the peak. Firefox has no suspend() on an
  *     OfflineAudioContext (Firefox 155); there the check records that and is not made;
- *   - zero-length notes (tasks/T13.md §11): program 0, whose output operator has a = 0, with its
+ *   - zero-length notes: program 0, whose output operator has a = 0, with its
  *     note-off at its note-on time, plays its release in both quality modes (peak at least
  *     audiblePeak). Upstream dropped it in quality 1, where the last operator has an attack;
  *   - completed attacks: every program with an attack (any operator a > 0), in both quality
@@ -59,7 +58,7 @@ const GUARD = 0.001; // the hold window ends this long before the note-off reach
 /*
  * Note lengths on whole frames at 44.1 kHz (0.025 s is 1102.5 frames). Firefox puts automation
  * events on whole frames, so a ramp re-ended between frames has a slightly different slope:
- * 0.5/1102.5 = 4.5e-4 of the level, measured without the library too (tasks/T13.md).
+ * 0.5/1102.5 = 4.5e-4 of the level, measured without the library too.
  */
 const DURATIONS = [0.025, 0.07, 0.3].map((D) => Math.round(D * 44100) / 44100);
 const FOLLOW = 2e-4; // short vs uncut note before T, max |diff| / peak; measured max 6.0e-5 (Firefox), 1.7e-5 (WebKit), 1.3e-5 (Chromium)
@@ -296,7 +295,7 @@ function cases(shared) {
         const p = await openPage(t, build);
         const has = await p.page.evaluate(() => window.__sn.hasSuspend); // eslint-disable-line no-undef -- runs in the page
         if (!has) {
-          t.observe("OfflineAudioContext.suspend() is not available in " + t.engine + ": the realtime lookahead is not emulated here (tasks/T13.md)", true);
+          t.observe("OfflineAudioContext.suspend() is not available in " + t.engine + ": the realtime lookahead is not emulated here", true);
           t.check("only Firefox lacks OfflineAudioContext.suspend()", t.engine === "firefox", t.engine);
         } else {
           const res = [];

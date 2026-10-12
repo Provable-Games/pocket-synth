@@ -8,7 +8,7 @@
  * (this file, started with TINYSYNTH_TRANSPORT_CHILD set) that is killed after
  * DEADLINE_MS. The child prints a line before each case, so a hang names it.
  *
- * Contract under test (tasks/T3.md):
+ * Transport contract under test:
  *   - A pass wraps only if the next pass advances: loopEnd > 0, or the last
  *     retained event is later than the first. Otherwise the song ends after one
  *     pass as if looping were off: play 0, curTick maxTick.

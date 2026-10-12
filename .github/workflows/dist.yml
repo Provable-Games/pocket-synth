@@ -6,7 +6,7 @@ name: Dist
 # (scripts/check-dist.js); this workflow is their only writer on that branch.
 # main is not automated: there the files change only in a manual release pull
 # request (README, "Releases").
-# Design, trust boundary and the main branch: docs/improvements/tasks/T1-dist.md.
+# Build/release commands and generated-file rules: README.md and AGENTS.md.
 #
 #   build          read-only token. npm ci, the pinned build, the inline-safety
 #                  checks, and the unit, native Node and regression suites run
@@ -220,7 +220,7 @@ jobs:
           fi
           cat "$RUNNER_TEMP/response.json" "$RUNNER_TEMP/error.txt" || true
           if grep -qs 'Resource not accessible by integration' "$RUNNER_TEMP/response.json" "$RUNNER_TEMP/error.txt"; then
-            echo "::error::GITHUB_TOKEN may not write to $GITHUB_REF_NAME (repository setting or ruleset); see docs/improvements/tasks/T1-dist.md"
+            echo "::error::GITHUB_TOKEN may not write to $GITHUB_REF_NAME (repository setting or ruleset); see AGENTS.md for CI setup"
           else
             echo "::error::createCommitOnBranch failed and $GITHUB_REF_NAME is still at $GITHUB_SHA"
           fi

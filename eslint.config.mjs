@@ -12,7 +12,6 @@ export default [
       "*.map",
       "bower_components/**",        // vendored demo controls
       ".github/scripts/**",         // AI-review helpers with their own pinned package
-      "docs/improvements/evidence/**", // frozen T0 probe evidence
     ],
   },
   js.configs.recommended,

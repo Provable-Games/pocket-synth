@@ -905,7 +905,7 @@ function WebAudioTinySynthCore(target) {
          kept out of the seek's reach. A song stopped before its end resumes as it is. */
       const s=this.song,n=this.notetab,d=this._src;
       /* The sequencer runs on the realtime timer, which cannot follow an offline render's
-         clock (#12, tasks/T4.md): schedule notes with explicit times instead. */
+         clock (#12): schedule notes with explicit times instead. */
       if(this._off)
         throw CodedError("AUDIO_CONTEXT_OFFLINE");
       if(!s || !s.ev.some(e=>e.m[0]!=0xff51))
@@ -1209,10 +1209,10 @@ function WebAudioTinySynthCore(target) {
       }
     },
     _filter:(pn,f,out)=>{
-      /* An audio-output operator's fixed filter (#27, D-007 and D-028), connected to out and
+      /* An audio-output operator's fixed filter (#27), connected to out and
          returned. Type fl. Cutoff or centre: ff Hz, or with fk 1 ff times the note-on frequency
          f (master, channel and scale tuning included; operator ratio and offset, bend, pitch
-         envelope and modulation excluded), clamped to 0.45 x the sample rate (tasks/T12.md).
+         envelope and modulation excluded), clamped to 0.45 x the sample rate.
          fq (default Math.SQRT1_2) is a linear Q, given in dB to low- and high-pass. */
       const b=this.actx.createBiquadFilter(),q=pn.fq||Math.SQRT1_2;
       b.type=pn.fl;

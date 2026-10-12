@@ -9,7 +9,7 @@
  * k = max(1, round(sampleRate / (440 N))) frames, and the home pitch is
  * sampleRate / (N k). One guard frame (the first sample again) follows the
  * N k frames, and notes loop only those (loopEnd = N k / sampleRate): a
- * Chromium loop-seam workaround (tasks/T11.md).
+ * Chromium loop-seam workaround.
  */
 import vm from "node:vm";
 import { describe, expect, test } from "vitest";
@@ -25,7 +25,7 @@ const calls = (trace, from = 0) => trace.slice(from).map((line) => JSON.parse(li
  * Math.sin calls for n1 at 44.1 kHz). One install costs about 0.43 s at 44.1 kHz and 0.93 s at
  * 96 kHz on a local x64 core, and about 1.25 s at 44.1 kHz on the arm64 CI runner with the other
  * unit files running alongside, so the four-install tests reached 5.0-5.1 s there against
- * Vitest's 5 s default (PR #57; tasks/T6.md §18.9). 60 s keeps more than ten times that.
+ * Vitest's 5 s default (PR #57). 60 s keeps more than ten times that.
  */
 const INSTALLS_TIMEOUT = 60000;
 

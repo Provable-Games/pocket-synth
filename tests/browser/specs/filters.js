@@ -1,5 +1,5 @@
 /*
- * Fixed operator filters (#27, D-007 as amended by D-028; tasks/T12.md) in real engines, for both
+ * Fixed operator filters (#27) in real engines, for both
  * builds. Expected values are computed here, independently of the library, from the contract:
  *   cutoff = min(fk ? ff x f(note) : ff, 0.45 x sampleRate), f(note) = 440 x 2^((note - 69) / 12);
  *   Q = fq (default Math.SQRT1_2) as a linear Q, in the RBJ cookbook biquad (Web Audio's formulas:
@@ -48,9 +48,9 @@ const smf = require("../lib/smf");
 const { openRenderPage, render } = require("./render");
 
 const CLAMP = 0.45;
-const RESPONSE_DB = 0.01; // measured max 0.0028 dB, at 0.4999 x SR (tasks/T12.md); at or below the clamp 1e-4
-const PROBE_DB = 0.02; // measured max: see tasks/T12.md
-const BAND_DB = 0.5; // measured max: see tasks/T12.md
+const RESPONSE_DB = 0.01; // measured max 0.0028 dB, at 0.4999 x SR; at or below the clamp 1e-4
+const PROBE_DB = 0.02; // measured-response tolerance
+const BAND_DB = 0.5; // measured-response tolerance
 const LEVEL = 0.05;
 const DETUNE = /^\d+>n\d+\.detune:/; // an edge from a node to a source's detune parameter (instrument.js keys)
 
@@ -264,7 +264,7 @@ const FIXTURE = JSON.parse(fs.readFileSync(path.join(pages.ROOT, "tests", "fixtu
 const FIX_SLOT = 2.0; // the lead's release tail is below -90 dB when the next slot starts
 /*
  * The fixture starts 1 s into the render, after the release tail of the install's velocity-1
- * warm-up note (quality 1, Firefox: peak 8.2e-6 at 0, below 1e-10 at 1 s; tasks/T13.md §5). That
+ * warm-up note (quality 1, Firefox: peak 8.2e-6 at 0, below 1e-10 at 1 s). That
  * note is not filtered, so in the high-passed hi-hat's lowest bands it would count as fixture output.
  */
 const FIX_START = 1;
@@ -418,7 +418,7 @@ function cases(shared) {
           t.check(ph.name + ": filters were created and connected (" + ph.created + " BiquadFilters, " + ph.mid + " live connections over the idle graph mid-phase)", ph.created >= 3 && ph.mid >= 2);
           // A filter has node-to-node connections only (gain -> filter -> channel volume). Routes from a
           // channel's modulation gain to a source's detune that WebKit keeps after some voices end are
-          // pre-existing (the base build d1f0e26 leaves the same; tasks/T12.md) and are observed, not judged here.
+          // pre-existing (the base build d1f0e26 leaves the same) and are observed, not judged here.
           const detune = ph.extra.filter((k) => DETUNE.test(k)), other = ph.extra.filter((k) => !DETUNE.test(k));
           t.observe(ph.name + ": leftover modulation-to-detune routes (pre-existing)", detune.length);
           t.check(ph.name + ": afterwards every node-to-node connection is the idle graph's, so none from or to a filter", !other.length && !ph.missing.length,
