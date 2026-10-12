@@ -18,12 +18,10 @@ MARKER_PREFIX = "tinysynth-ai-review"
 BOT_LOGIN = "github-actions[bot]"
 MAX_COMMENT_CHARS = 60000
 
-AGENT_ID_RE = re.compile(r"^[a-z][a-z0-9-]{0,31}$")
 VARIABLE_RE = re.compile(r"^[A-Z][A-Z0-9_]{0,63}$")
 MODEL_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:@/-]{0,127}(\[[A-Za-z0-9]{1,16}\])?$")
 EFFORT_RE = re.compile(r"^[a-z][a-z0-9_-]{0,31}$")
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
-PROMPT_DIR = ".github/prompts/"
 
 FENCE_RE = re.compile(r"^ {0,3}(`{3,}|~{3,})")
 FINDING_RE = re.compile(r"^### \[([A-Z]+)\] (\S.*?):(\d+)(?:-(\d+))? (?:—|–|-) (\S.*?)\s*$")
@@ -56,14 +54,6 @@ class ReviewError(Exception):
 # Trusted configuration
 
 
-def _relative_prompt_path(value, what):
-    if not isinstance(value, str) or not value.startswith(PROMPT_DIR) or not value.endswith(".md"):
-        raise ReviewError(f"{what} must be a Markdown file under {PROMPT_DIR}: {value!r}")
-    if ".." in Path(value).parts or "\\" in value:
-        raise ReviewError(f"{what} must not leave {PROMPT_DIR}: {value!r}")
-    return value
-
-
 def load_config(config_root):
     """Load and validate .github/review-agents.json from a staged config root."""
     root = Path(config_root)
@@ -74,12 +64,11 @@ def load_config(config_root):
         raise ReviewError(f"review configuration not found: {path}") from None
     except (OSError, json.JSONDecodeError) as error:
         raise ReviewError(f"review configuration is unreadable: {error}") from None
-    if not isinstance(config, dict) or config.get("schema_version") != 1:
-        raise ReviewError("review-agents.json must be an object with schema_version 1")
+    if not isinstance(config, dict) or config.get("schema_version") != 2:
+        raise ReviewError("review-agents.json must be an object with schema_version 2")
 
-    policy = _relative_prompt_path(config.get("policy_file"), "policy_file")
-    if not (root / policy).is_file():
-        raise ReviewError(f"policy_file is missing from the staged configuration: {policy}")
+    if "policy_file" in config:
+        raise ReviewError("schema_version 2 uses the policy built into review.py, not policy_file")
 
     blocking = config.get("blocking_severities")
     if not isinstance(blocking, list) or not blocking or any(s not in SEVERITIES for s in blocking):
@@ -91,14 +80,13 @@ def load_config(config_root):
     seen = set()
     for agent in agents:
         agent_id = agent.get("agent_id") if isinstance(agent, dict) else None
-        if not isinstance(agent_id, str) or not AGENT_ID_RE.fullmatch(agent_id) or agent_id in seen:
-            raise ReviewError(f"agent_id must be a unique lowercase slug: {agent_id!r}")
+        if agent_id != "tinysynth" or agent_id in seen:
+            raise ReviewError(f"agent_id must be the unique built-in TinySynth role: {agent_id!r}")
         seen.add(agent_id)
         if not isinstance(agent.get("agent_name"), str) or not agent["agent_name"].strip():
             raise ReviewError(f"agent {agent_id} needs an agent_name")
-        prompt = _relative_prompt_path(agent.get("prompt_file"), f"agent {agent_id} prompt_file")
-        if not (root / prompt).is_file():
-            raise ReviewError(f"agent {agent_id} prompt is missing from the staged configuration: {prompt}")
+        if "prompt_file" in agent:
+            raise ReviewError(f"agent {agent_id} uses the role built into review.py, not prompt_file")
         paths = agent.get("diff_paths")
         if not isinstance(paths, list) or not paths or not all(isinstance(p, str) and p for p in paths):
             raise ReviewError(f"agent {agent_id} needs a non-empty diff_paths list")

@@ -1,5 +1,5 @@
 /*
- * T5.2 (#13 follow-up, tasks/T5.2.md), on the mock WebAudio of
+ * Float32 input guards (#13 follow-up), on the mock WebAudio of
  * tests/harness.js made as strict as WebIDL makes real engines (Firefox in
  * particular), for both builds:
  *
@@ -17,7 +17,7 @@
  *
  * Expected values come from the WebIDL float conversion (2^128 - 2^103 is the
  * smallest magnitude that rounds past the largest float32), the operator
- * formulas in tasks/T5.2.md, or the times the caller passed.
+ * formulas for the operators, or the times the caller passed.
  */
 import vm from "node:vm";
 import { describe, expect, test } from "vitest";

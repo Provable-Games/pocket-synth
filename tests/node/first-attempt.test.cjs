@@ -5,7 +5,7 @@
  * source/min mismatch, injected into the first attempt only. The re-renders are kept as
  * diagnostics: counted exactly, recorded apart from the verdict. The specs run against a scripted
  * page here (no browser); the same faults go through real engines with
- * TINYSYNTH_INJECT_FIRST_ATTEMPT_FAULT (tasks/T13.1.md).
+ * TINYSYNTH_INJECT_FIRST_ATTEMPT_FAULT.
  */
 "use strict";
 const test = require("node:test");

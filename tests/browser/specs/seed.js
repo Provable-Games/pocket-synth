@@ -1,6 +1,5 @@
 /*
- * Seeded built-in buffers (#7, D-004, ledger L-07): T6's phase-B row for T8
- * (tasks/T6.md §13), replacing the variation spec's buffer observation and the
+ * Seeded built-in buffers (#7), replacing the variation spec's observation and the
  * test pages' Math.random seeding as the evidence for #7.
  *
  * Every page here replaces Math.random, before the library loads, with a

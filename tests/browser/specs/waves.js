@@ -1,10 +1,9 @@
 /*
- * The #26 waveform registry in real engines (T11; D-006, D-021, D-027, D-028;
- * docs/improvements/tasks/T11.md). One case per quality mode and sample rate;
+ * The #26 waveform registry in real engines. One case per quality mode and sample rate;
  * each case renders every item with the source and the minified build, in
  * offline pages (every request aborted), on an OfflineAudioContext given to
  * the constructor, and measures the PCM in Node (lib/analysis.js). Notes play
- * at masterVol 0.05, below the DynamicsCompressor's threshold (T6 §4.1).
+ * at masterVol 0.05, below the DynamicsCompressor's threshold.
  *
  * Asserted:
  *   - tables: each registered sample wave's AudioBuffer holds D-027's held
@@ -55,8 +54,8 @@ const A = require("../lib/analysis");
 const { tolerances } = require("../tolerances");
 
 /*
- * Tolerances for this spec, declared from the T11 runs (tasks/T11.md, the
- * waves spec results), in addition to tolerances.js (noteAmpMin, audiblePeak,
+ * Tolerances declared from measured waveform renders, in addition to
+ * tolerances.js (noteAmpMin, audiblePeak,
  * sameEngineSample).
  */
 const WAVES = {
@@ -95,7 +94,7 @@ const REGISTER = FIXTURE.waves.map((w) => (w.Harmonics ? ["setHarmonicWave", w.n
   .concat([["setSampleWave", "nS256", S256]]);
 const SAMPLES = Object.fromEntries(REGISTER.filter((c) => c[0] === "setSampleWave").map((c) => [c[1], c[2]]));
 
-/* D-027, written from the formula: k, the held frames plus the guard frame (the first sample again; tasks/T11.md) and the home pitch. */
+/* D-027, written from the formula: k, the held frames plus the guard frame (the first sample again) and the home pitch. */
 function held(samples, sr) {
   const n = samples.length, k = Math.max(1, Math.round(sr / (440 * n)));
   const frames = new Float32Array(n * k + 1);

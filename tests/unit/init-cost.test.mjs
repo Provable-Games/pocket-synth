@@ -1,6 +1,6 @@
 /*
- * Initialization cost (#18, ledger L-16) on the mock WebAudio of tests/harness.js, for both
- * builds. The measurements are in tasks/T8.md; these tests pin what the changes promise:
+ * Initialization cost (#18) on the mock WebAudio of tests/harness.js, for both
+ * builds. These tests pin deferred work and buffer identity:
  *
  *   - with useReverb 0 the install makes no reverb impulse (convBuf is null, no 2-channel
  *     buffer, no convolver), and n0 and n1 are unchanged, because every buffer has its own

@@ -1,7 +1,8 @@
 # Codex review. The required check is the "Codex review gate" job.
 # Model and effort come only from the Actions variables CODEX_REVIEW_MODEL and
 # CODEX_REVIEW_EFFORT; the CLI version is pinned in .github/scripts/codex-cli.
-# Setup, trust boundary and bootstrap rules: .github/scripts/README.md.
+# Setup, trust boundary and bootstrap rules: AGENTS.md.
+# Keep .github/prompts in sparse checkouts for legacy BASE helpers that read it.
 name: Codex Review
 
 on:
@@ -305,7 +306,7 @@ jobs:
             --exit-code-file "$run_dir/exit-code" --review-file "$run_dir/review.txt" \
             --log-file "$run_dir/codex.log" --auth-file "$RUNNER_TEMP/codex-home/auth.json" "${steps[@]}"
 
-      # One bounded retry (.github/scripts/README.md, "Retry"). The first result
+      # One bounded retry. The first result
       # step asks for it only when the output is malformed and carries no review
       # content (review_lib.retryable_output); output with a finding, a severity
       # or a location is never retried. The retry runs the same script with the

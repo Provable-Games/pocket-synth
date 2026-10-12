@@ -1,5 +1,5 @@
 /*
- * Short notes (#59, D-039, ledger L-15; tasks/T13.md): a note released before an operator's
+ * Short notes (#59): a note released before an operator's
  * attack ends, on the mock WebAudio of tests/harness.js, for both builds.
  *
  * An operator with attack a > 0 starts at 0 at the note-on time t and ramps to its level v at
@@ -20,7 +20,7 @@ import { H, variants, synthFor } from "./helpers.mjs";
 
 /*
  * Tests that install two synths (each install generates the seeded buffers: about 0.43 s locally
- * and 1.25 s on the arm64 CI runner, tasks/T6.md §18.9) get more than Vitest's 5 s default.
+ * and 1.25 s on the arm64 CI runner) get more than Vitest's 5 s default.
  */
 const INSTALLS_TIMEOUT = 60000;
 

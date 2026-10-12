@@ -42,8 +42,8 @@ const { withTimeout, short } = require("../lib/cases");
 // Seconds: the external deadline around one scenario (the longest runs about 4 s of context time).
 const SCENARIO_DEADLINE = 12;
 // Seconds. Scheduled note times against the tempo map. The library adds tick
-// durations in double precision; the measured largest difference is recorded
-// in docs/improvements/tasks/T6.md (phase B.1). A wrong tempo is off by >= 0.1 s.
+// durations in double precision. This tolerance covers the measured rounding
+// difference; a wrong tempo is off by >= 0.1 s.
 const TIME_TOL = 1e-6;
 
 /* A one-operator sine timbre for program 0: one source per note, released in 20 ms. */

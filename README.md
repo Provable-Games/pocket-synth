@@ -1,120 +1,52 @@
 # webaudio-tinysynth (Provable Games fork)
-WebAudio Tiny GM mapped Synthesizer [JavaScript], with the GUI removed.
 
-## About this fork
+A small, dependency-free JavaScript GM synthesizer and Standard MIDI File sequencer. Sounds are generated with Web Audio oscillators and buffers; no sample downloads are needed. Quality 0 uses lightweight chiptune sounds, and quality 1 uses FM sounds with multiple operators.
 
-This is [g200kg/webaudio-tinysynth](https://github.com/g200kg/webaudio-tinysynth) by Tatsuya Shinyagaito (g200kg), based on upstream commit [`3d75aee`](https://github.com/g200kg/webaudio-tinysynth/commit/3d75aee4b3f43cbd932265e7d60201fd5b770397). The synthesizer, the timbres and the MIDI sequencer are all upstream's work.
+This fork of [g200kg/webaudio-tinysynth](https://github.com/g200kg/webaudio-tinysynth) removes the GUI and custom element for compact offline/onchain NFT `animation_url` embedding. It retains the JavaScript API, CommonJS/AMD exports and `window.WebAudioTinySynth`. Fork additions include validated MIDI parsing, fractional tempo, loop boundaries, context lifecycle controls, seeded noise/reverb, custom waves and operator filters. [NOTICE](NOTICE) records attribution and modifications; [LICENSE](LICENSE) is Apache-2.0.
 
-**What is removed:**
-- the `<webaudio-tinysynth>` custom element and its HTML attributes;
-- its canvas panel: play/stop, seek bar, volume, note and channel indicators, and MIDI file drag-and-drop;
-- the GUI-only members `width`, `height`, `graph`, `disabledrop`, `perfmon`, `layout`, `toTime` and the pointer and drag handlers.
+## Quick start
 
-**Why:** Provable Games stores this synth onchain and embeds it in NFT `animation_url` pages. Those pages only use the JavaScript API, so every byte of GUI code would be paid for in storage. The initial GUI removal reduced `webaudio-tinysynth.min.js` from 43,217 to 36,804 bytes. Later engine improvements change that size; run `npm run size` for the current build.
+Copy `webaudio-tinysynth.js` or the minified build into your page. Each works as a single classic script. Upstream CDN copies and the `webaudio-tinysynth` npm package include the upstream GUI; use this fork's files for the behavior documented here.
 
-**What behaves differently:**
-- MIDI tempo is kept fractional. Upstream rounds the BPM down to a whole number (`Math.floor(60000000 / microsecondsPerQuarter)`), so 455,000 µs per quarter note (131.868 BPM) plays at 131 BPM, 0.66% slow.
-- `loadMIDI` checks the file before installing it, and throws an `Error` when it cannot use it:
-  - an invalid `MThd` header: `SMF_INVALID_HEADER`;
-  - format 2 or an unknown format: `SMF_UNSUPPORTED_FORMAT`;
-  - an SMPTE or zero time division: `SMF_UNSUPPORTED_DIVISION`;
-  - data that ends inside a header, chunk or event, or fewer track chunks than declared: `SMF_TRUNCATED`;
-  - invalid event data: `SMF_MALFORMED`.
-
-  The error has a `code`, an `offset` (byte offset) and, inside a track, a `track` (0-based track chunk index). A failed load changes nothing: the previous song, playback and channel state are kept. Some irregular files still load, as before: a track without End-of-Track that ends on an event boundary, bytes after End-of-Track, or a header that declares no tracks. So a successful load does not prove a file is strictly valid. Upstream returned silently or loaded what it could read, and some truncated files made it hang.
-
-- Playback avoids non-advancing loops and restores MIDI state on seeks and completed replays:
-  - Looping a song that cannot advance, for example with every event on one tick and `loopEnd` unset, plays it once and stops. Upstream hung the page. Each timer callback handles at most 1000 events, and the rest follow in order.
-  - A song with no playable events, only tempo or metadata, stays stopped: `playMIDI()` does nothing. Upstream reported `play: 1` forever.
-  - `playMIDI()` on a finished song starts a new pass at the song's initial tempo and channel state, as `locateMIDI(0)` does. Upstream replayed the opening at the tempo the song ended on. Notes still sounding from the previous pass are not cut.
-  - `locateMIDI(tick)` rebuilds tempo and channel state from the song up to `tick`: programs, controllers, bend and bend range, RPN and SysEx tuning. A seek gives the same result whatever happened before. Upstream kept earlier programs and tempo and replayed only some controllers. Channel changes you made with `setProgram`, `send()` and similar, and controller changes scheduled for later, are replaced. Engine settings (volume, reverb, quality, voices, loop, `loopEnd`, timbres) are kept. Seeking with no song loaded does nothing.
-  - With `loopEnd` set, the first pass keeps the rest before the song's first event, as every later pass already did: `playMIDI()` from the start (after `loadMIDI()` or `locateMIDI(0)`, or on a finished song) sounds tick 0 0.1 s later and each event at its own tick's time. Upstream, and this fork with `loopEnd` unset, plays the first event at once. A seek to a later tick still resumes at the next event.
-- `stopMIDI()` now also stops drums and queued controller changes: every drum hit, sounding or already scheduled, stops, and channel volume, pan and modulation changes scheduled for later are cancelled. A seek (`locateMIDI()`) stops the same way. Upstream let drum hits scheduled up to 0.2 s ahead, and queued controller changes, play on after a stop.
-- An instance can start from a user gesture and release everything it uses: the constructor options `context`, `destination` and `lazy`, `resume()` and `dispose()` are new (see [Functions](#functions)). `setAudioContext()` now stops and disconnects the previous graph, and closes the previous context if the synth created it. Ended voices are disconnected, `send()` no longer leaves unhandled promise rejections, and on an `OfflineAudioContext`, `playMIDI()` throws an `Error` with `code` `AUDIO_CONTEXT_OFFLINE` (schedule notes with explicit times instead). Upstream kept every context, graph and timer alive.
-- Public functions check their arguments before changing anything. Channels are 0–15; notes, programs, velocities and controller values 0–127 (`setProgram` also selects a program slot you added to `synth.program` yourself; a slot that does not exist throws a `RangeError`); bends and bend ranges 0–16383; times finite and ≥ 0 (or omitted); `setQuality` 0 or 1; `setVoices` a whole number ≥ 1; `setLoopEnd` whole ticks ≥ 0; volumes and reverb levels ≥ 0, within the float32 range AudioParams use. Numeric strings such as `"64"` are accepted. Anything else throws a `TypeError` or `RangeError` and changes nothing; `setQuality("0")` now selects quality 0 (upstream selected 1), and an out-of-range `setTimbre` slot throws instead of being ignored. A malformed raw message passed to `send()` (too short for its status byte, or a data byte above 127) is ignored.
-- `setTimbre()` checks the timbre (known or registered waveform, routing only into an earlier operator, finite values, times ≥ 0, valid filter fields) and stores a copy with the defaults filled in: your objects are no longer modified, and the built-in tables are no longer changed by edits to the installed timbre. An invalid timbre throws a `TypeError` or `RangeError` and changes nothing. Times (`a`, `h`, `d`, `r`, `q`) must also be finite as 32-bit floats (up to about 3.4e38), the range Web Audio uses. A note is not played if one of its computed values is outside that range. This can happen at a high note or tuning, for example with a long FM chain or a large `k`. The note makes no sound, creates nothing and takes no voice. Upstream threw part-way through the note in every browser, and Firefox could then render invalid samples.
-- `loadMIDIUrl()` returns a promise and accepts `{signal}` to cancel. It resolves once the song is installed and rejects with a coded error otherwise; a newer load or a direct `loadMIDI()` wins over a pending one; `dispose()` cancels it. Ignoring the result never leaves an unhandled rejection.
-- A note released before its attack has ended now sounds. Each operator follows its attack up to the note-off and is released from the level it has reached, its level times the elapsed time over its attack time (`v·(T − t)/a`). Upstream cancelled the unfinished attack, so the operator stayed silent until the note-off, and it took every operator's release level from the last operator's attack time instead of its own. For example, at quality 1, a 0.07 s note on the violin, viola, cello, contrabass or tremolo strings (programs 40–44) was silent, and programs 119 (Reverse Cymbal) and 125 (Helicopter) were silent even at 0.3 s. In realtime playback, where `playMIDI()` sends each note-off about 0.2 s ahead, upstream also cut a slow attack to silence from that moment on; now it plays on to the note-off. Notes whose attacks have all ended when they are released sound exactly as before. A zero-length note (note-off at its note-on time) now plays the release of its operators that have no attack (`a = 0`), as most synths do; upstream dropped it whenever the timbre's last operator had an attack.
-- The reverb and noise sounds are the same on every load. The reverb impulse and the two noise buffers (`n0`, used by most drums, and `n1`, the metallic noise of cymbals and hi-hats) are generated from a seed instead of `Math.random`, so a given seed, sample rate and library version always produce the same buffer data. The default seed is `0`; pass `seed` to the constructor to choose another. Compared with upstream, the reverb and noise texture changes once and then stays fixed. Upstream drew new random buffers each time an AudioContext was installed. Rendered audio can still differ slightly between browsers and between sample rates.
-- Installing an AudioContext is much cheaper, and the cost of the metallic noise moves to first use. Upstream spent nearly all of an install generating `n1` (64 passes of sine products, the noise of cymbals and hi-hats), and also made the reverb impulse when `useReverb` was 0. Now `n1` is generated once per context installation (a `setAudioContext()` with the same object counts), by the first `playMIDI()`, by `prewarm()`, or by the first note that plays it, and the impulse only with reverb on. The data is the same as before for every seed, and `convBuf` is `null` with `useReverb: 0`. Constructing a synth on an `OfflineAudioContext` and playing a first melodic note takes 2–5 ms warm and 9–14 ms in a fresh page in Chromium 153 (44–50 ms and 55–62 ms before), 0.6–4 and 3–8 ms in Firefox 155 (28–35 and 32–49 ms before), and 8–15 and 12–21 ms in WebKit 26.6 (29–52 and 41–55 ms before). The generation takes 41–47 ms in Chromium, 26–29 ms in Firefox and 20–29 ms in WebKit on the machine measured, and every song pays it once per installation: the first `playMIDI()` waits that long before it sets the start, so the song starts slightly later and nothing within it shifts (`startTime` stays exact). A live note you send before that, without `prewarm()`, starts after the generation with its full envelope: in Chromium 153 on a real `AudioContext` the call takes 43 ms and the first `n1` note starts 46 ms after it. Its note-off and sustain-pedal release still match it, whenever they were timed. After `await synth.resume(); synth.prewarm();` live notes start on time. See [tasks/T8.md](docs/improvements/tasks/T8.md) for the measurements.
-
-**What is added:** the `loopEnd` property and `setLoopEnd(ticks)`. When looping, each pass can start on a bar boundary instead of on the song's last event (see `setLoopEnd()` below). Unset, looping works exactly as upstream. `getPlayStatus()` has a fourth field, `startTime`: when tick 0 of the current pass sounds, for syncing visuals to the music. Custom waveforms: `setSampleWave(name, samples)` registers a single-cycle table (for example a 4-bit stepped triangle, a 12.5 % pulse or an LFSR noise table) and `setHarmonicWave(name, real, imag)` a harmonic wave; a timbre operator uses one through its `w` field. Registered waves survive `setQuality()` (custom timbres still need reinstalling) and context changes. Optional fixed filters on an operator's output: the timbre fields `fl`, `ff`, `fq` and `fk` (see [Timbre Object Structure](#timbre-object-structure)); a timbre without `fl` builds exactly the same graph as before.
-
-**What is unchanged:** `new WebAudioTinySynth(options)`, every upstream function documented below apart from the changes above, and the CommonJS / AMD / `window.WebAudioTinySynth` exports.
-
-**Tests:** `npm test` runs the unit tests, the native Node tests and the regression scripts. The differential regression plays every MIDI file in this repository through upstream's file (with the tempo and short-note changes above applied, and nothing else) and through this one, against a mock WebAudio, and checks that both make exactly the same calls. The others check note timing at fractional tempos (`tests/tempo.js`) and `loopEnd` looping (`tests/loop-end.js`). See [Development](#development) for every command.
-
-**Usage:**
 ```html
+<button id="play">Play a note</button>
 <script src="webaudio-tinysynth.min.js"></script>
 <script>
-  const synth = new WebAudioTinySynth({quality: 1, voices: 64});
-  synth.loadMIDI(midiArrayBuffer);   // the bytes of a .mid file
-  synth.setLoop(1);
-  synth.playMIDI();
-  // or play notes directly: synth.send([0x90, 60, 100]);
+  const synth = new WebAudioTinySynth({quality: 1, voices: 64, lazy: true});
+  document.getElementById("play").onclick = async () => {
+    try {
+      await synth.resume(); // start audio from a user gesture
+      synth.prewarm();     // build metallic noise before live notes
+      const t = synth.getAudioContext().currentTime;
+      synth.noteOn(0, 60, 100, t);
+      synth.noteOff(0, 60, t + 0.5);
+    } catch (error) {
+      console.error(error);
+    }
+  };
 </script>
 ```
 
-**License:** Apache License 2.0, unchanged ([LICENSE](./LICENSE)). [NOTICE](./NOTICE) lists the changes.
+CommonJS: `const WebAudioTinySynth = require("./webaudio-tinysynth.js");`.
 
-The rest of this README is upstream's documentation, with the GUI parts removed.
+After starting audio, load and play MIDI bytes:
 
-## Overview
+```js
+synth.loadMIDI(midiArrayBuffer);
+synth.setLoop(1);
+synth.setLoopEnd(4 * 4 * 480); // four bars of 4/4 at 480 ticks/quarter
+synth.playMIDI();
+// Raw MIDI is also supported: synth.send([0x90, 60, 100]);
+// Stop playback with synth.stopMIDI(); release resources with await synth.dispose().
+```
 
-**webaudio-tinysynth** is a small synthesizer written in JavaScript with GM like timbre map.
-All timbres are generated by the combinations of Oscillator and dynamically generated BufferSource algolithmically without any PCM samples.
+## Demos and compatibility
 
-- This fork is the JavaScript library only. The synthesizer instance is created like this: `synth = new WebAudioTinySynth()`, and everything is controlled by function calls. (Upstream also provides a `<webaudio-tinysynth>` custom element with a small GUI; it is removed here.)
+Serve the repository root, for example with `python3 -m http.server 0`, and open [simple.html](simple.html), [soundedit.html](soundedit.html) (timbre editor/Web MIDI keyboard) or [jstest.html](jstest.html). The demos use local assets and start audio on a click, tap or key press. They display audio and URL-load errors. The editor applies changes with `setTimbre()` and reinstalls them after a quality change; its Patch output is a JavaScript array literal, not JSON.
 
-- The APIs are MIDI like. Function  `send([midi-message],timestamp)` receives MIDI message and generate sounds.
+Modern Chrome, Edge, Firefox and Safari support the library. Browsers require a user gesture for realtime audio; Web MIDI availability and permissions vary. No network access is needed for synthesis or playback from supplied MIDI bytes. `loadMIDIUrl()` explicitly fetches the URL you provide.
 
-- Two timbre set are supported. These are switched by `quality` option. `quality=0` mode is light-weight chip-tune like sounds that use 1 osc per 1 note. `quality=1` mode is FM based sounds and use 2 or more osc per 1 note.
-
-- webaudio-tinysynth has a built-in MIDI-SMF (.mid file) sequencer, driven by function calls (`loadMIDI()`, `playMIDI()`, `stopMIDI()`, `locateMIDI()`).
-
-## Files
-  **webaudio-tinysynth.js** : JavaScript library  
-  **webaudio-tinysynth.min.js** : JavaScript library minified version (`npm run build`)  
-  Each one works with only one file, there are no dependencies.
-
-## Environment
- Webaudio-tinysynth is confirmed to work with the following browsers
-  * Chrome / Firefox / Edge / Safari
-
-## Demo pages
-Serve the repository root (for example `python3 -m http.server`) and open:  
- **soundedit.html**  (playable demo with timbre editor / MIDI keyboard via WebMIDI API)  
- **simple.html**  (minimal page: timbre select, on-screen keyboard, MIDI file playback)  
- **jstest.html**  (JavaScript API test page)
-
-- No AudioContext exists until your first click, tap or key press on the page, which starts audio with `resume()` (the demos use `lazy: true`). A Web MIDI note played before that creates one that stays blocked until then. Each page says whether audio is off, blocked by the browser, on, or failed to start, with the error.
-- A failed URL load shows the error's `code`, for example `HTTP_STATUS 404`, `NETWORK_ERROR` or `SMF_INVALID_HEADER`. A load replaced by a newer one, or cancelled by choosing a file, shows nothing. In soundedit.html, **Play** plays a song that is still loading once it is installed, and loads the sample song `ws.mid` when no song is loaded or loading. Installing a song creates the AudioContext and resets every channel, so the sample song is not loaded with the page. Choosing another file while a Play waits for a song cancels that Play, so the newest file wins whichever read finishes first: press Play again to play it.
-- soundedit.html's Timbre Editor installs each edit with `setTimbre()` and shows a value it rejects. A quality change reinstalls the built-in timbres, and the editor then installs its edited timbres again. The Patch text is a read-only JavaScript array literal for `setTimbre()`, not JSON, and cannot be pasted back into the editor.
-- soundedit.html's sustain pedal (the Sustain checkbox or Shift) and a MIDI input's pedal each hold a channel: a channel stays sustained until both are up, including across a channel change.
-- The demos make no network request: the page, `webaudio-tinysynth.js`, `ws.mid`, the logo and the vendored `bower_components/webaudio-controls/webaudio-controls.js` all come from the repository. Each page has a title, declares UTF-8 and links to this fork as well as to upstream.
-
-Upstream's hosted demos at [g200kg.github.io/webaudio-tinysynth](https://g200kg.github.io/webaudio-tinysynth/soundedit.html) use the original build with the GUI.
-
-## Usage
-
-### Load this Library
-
-* Necessary file is a `webaudio-tinysynth.js` ( or minified `webaudio-tinysynth.min.js` ) only. Deploy it appropriately and load library:
-  * `<script src='webaudio-tinysynth.js'></script>`
-  * Or with CommonJS:  
-  `var WebAudioTinySynth = require('./webaudio-tinysynth.js');`
-* The CDN copies (`g200kg.github.io`, jsDelivr) and the `webaudio-tinysynth` npm package are upstream's build, which still includes the GUI.
-
-### Create a synthesizer
-
-* To make the instance of synthesizer, use following command :  
-`synth = new WebAudioTinySynth();`  
-  Some options are acceptable. For example :
-  * `synth = new WebAudioTinySynth({quality:0, useReverb:0});`
-
-* Then use the function calls described later for that instance. For example...  
- `synth.send([0x90, 60, 100]); // NoteOn:ch1 Note#:60 Velocity:100 `
+SMF formats 0 and 1 with ticks-per-quarter division are supported; format 2 and SMPTE division are rejected. On an `OfflineAudioContext`, schedule notes with explicit timestamps; the realtime sequencer is unavailable. Noise/reverb buffers are reproducible for the same seed, `bufferVersion` and sample rate, but rendered PCM can differ between engines. Short notes release each operator from the attack level reached at note-off; zero-length notes retain the release of operators with no attack.
 
 ## Properties
 
@@ -124,7 +56,7 @@ Settings are changed with the functions below (`setMasterVol()`, `setReverbLev()
 |-------------------|----------|--------------------------|
 |**masterVol**      | 0.5      | master volume            |
 |**reverbLev**      | 0.3      | reverb level             |
-|**useReverb**      | 1        | disable Reverb if 0 (constructor option). With 0 the reverb impulse is not generated (`convBuf` is `null`) and no convolver is made, which saves its 0.4–0.5 ms and half of the install's buffer memory (172 of 344 KiB at 44.1 kHz). Like the other settings it is read when a context is installed: set it before `setAudioContext()` or the lazy start. |
+|**useReverb**      | 1        | 0 disables reverb: no impulse buffer or convolver is created. Read when a context is installed; set it before `setAudioContext()` or lazy start. |
 |**quality**        | 1        | 0: 1osc/note chiptune like<br/> 1: 2 or more oscs/note FM based|
 |**loop**           | 0        | loop playMIDI            |
 |**loopEnd**        | 0        | loop length in MIDI ticks; 0 = loop on the last event (see `setLoopEnd()`) |
@@ -134,16 +66,17 @@ Settings are changed with the functions below (`setMasterVol()`, `setReverbLev()
 |**bufferVersion**  | 1        | version of the buffer generation (read-only). A library change that alters the generated buffers increments it. |
 
 * Assigning `masterVol`, `reverbLev` or `quality` directly does not apply the change; call `setMasterVol()`, `setReverbLev()` or `setQuality()`.
-* The constructor creates an AudioContext. Use `setAudioContext()` to switch to your own.
+* The constructor creates an AudioContext unless `lazy: true` or `context` is supplied. Use `setAudioContext()` to switch contexts.
 * The synth is ready as soon as the constructor returns (`isReady` is 1). `ready()` is kept for compatibility: it returns a `Promise` that resolves once the synth is initialized.
 * `n1` (the metallic noise of cymbals and hi-hats) is generated once per context installation, when it is first needed: by `playMIDI()` (before it reads the clock), by `prewarm()`, or by the first note that plays it. Until then the install does not pay for it, and disposing or replacing the context first never generates it.
 * The buffers are generated with mulberry32. The seed is first mixed with murmur3's `fmix32`, then each buffer gets its own stream, starting at `fmix32(seed) + k·2^30` (k = 0 reverb, 1 `n0`, 2 `n1`). So changing or skipping one buffer never changes another.
 
 ## Functions
-  These functions are available on a `WebAudioTinySynth` instance.  
+
+These functions are available on a `WebAudioTinySynth` instance. Public setters validate before changing state and throw `TypeError` or `RangeError` on invalid arguments. Numeric strings are accepted. Channels are 0–15; notes, velocities, controllers and GM programs are 0–127; bends and bend ranges are 0–16383; times are finite and ≥ 0. Volumes and reverb levels must also fit a 32-bit float. `setVoices()` requires an integer ≥ 1 and `setLoopEnd()` integer ticks ≥ 0. Malformed raw MIDI messages are ignored.
 
 **WebAudioTinySynth(options)**  
-> Constructor of WebAudioTinySynth. options is a object with members :  
+> Constructor options:
 
 >  **quality** : Specify timbre quality same as setQuality(). default is `1`.  
 >  **useReverb** : If zero, disable reverb function.  
@@ -162,13 +95,13 @@ Settings are changed with the functions below (`setMasterVol()`, `setReverbLev()
 > Get current in-use AudioContext.
 
 **setAudioContext(audioContext, destinationNode)**  
-> In default, though audioContext is internally created and used, this function can specify `audioContext` should be used.  
-> All sounds are routed to specified `destinationNode`, or audioContext.destination is used if destinationNode is not specified.  
-> the audioContext in use currently can be accessed with `getAudioContext()` fucntion.
+> Replaces the current context with `audioContext`.
+> Routes sounds to `destinationNode`, or to `audioContext.destination` if omitted.
+> Get the installed context with `getAudioContext()`.
 > The previous context's sounds stop, and the synth closes it if it created it. Call `stopMIDI()` before switching contexts during playback: the sequencer keeps the old context's clock, as upstream, so playback on a new context waits until that context's clock catches up.
 
 **prewarm()**  
-> Generates the metallic noise `n1` now (20–47 ms on a desktop, once per context installation) instead of at the first `n1` note, so live notes start on time: `await synth.resume(); synth.prewarm();` before sending notes. It is synchronous, returns `undefined`, plays nothing and neither creates nor resumes a context: it does nothing before a lazy synth has one, after `dispose()`, or when `n1` is already built. `playMIDI()` calls it itself, before it reads the clock. It removes this deferred generation only, not other first-use or scheduling costs.
+> Generates the metallic noise `n1` now (once per context installation) instead of at the first `n1` note, so live notes start on time: `await synth.resume(); synth.prewarm();` before sending notes. It is synchronous, returns `undefined`, plays nothing and neither creates nor resumes a context: it does nothing before a lazy synth has one, after `dispose()`, or when `n1` is already built. `playMIDI()` calls it itself, before it reads the clock. It removes this deferred generation only, not other first-use or scheduling costs.
 
 **resume()**  
 > Returns a `Promise` that resolves once the AudioContext is running. Browsers start audio only after a user gesture, so call it from a click, key or pointer handler. With `lazy`, it creates the AudioContext first. It rejects with the browser's error, or with an `Error` whose `code` is `AUDIO_CONTEXT_CLOSED` (the context is closed) or `SYNTH_DISPOSED`. On an OfflineAudioContext it resolves at once.
@@ -210,19 +143,29 @@ Settings are changed with the functions below (`setMasterVol()`, `setReverbLev()
 
 **loadMIDI(mididata)**
 > load MIDI data to built-in sequencer. mididata is a arraybuffer of SMF (.mid file contents).  
-> Throws an `Error` with an `SMF_*` `code` when it cannot parse or does not support the data (see [What behaves differently](#about-this-fork)); the previous song is kept. Some irregular files still load, so it is not a strict validator. Use `try`/`catch` for files you did not create.
+> Parsing uses bounded reads. Errors preserve the previous song, playback and channel state, and include `code`, byte `offset` and, inside a track, 0-based `track`:
+>
+> | Code | Reason |
+> | --- | --- |
+> | `SMF_INVALID_HEADER` | Invalid `MThd` header |
+> | `SMF_UNSUPPORTED_FORMAT` | Format 2 or an unknown format |
+> | `SMF_UNSUPPORTED_DIVISION` | SMPTE or zero time division |
+> | `SMF_TRUNCATED` | Incomplete header, chunk or event, or fewer tracks than declared |
+> | `SMF_MALFORMED` | Invalid event data |
+>
+> This is not a strict validator: tracks ending on an event boundary without End-of-Track, bytes after End-of-Track, and zero declared tracks still load. Use `try`/`catch` for untrusted files.
 
 **loadMIDIUrl(url, opts)**
 > Loads a Standard MIDI File from `url` and returns a promise that resolves with the response's `ArrayBuffer` once the song is installed. It rejects, leaving the current song, with an `Error` whose `code` is `HTTP_STATUS` (with `status`; statuses 200–299 succeed), `NETWORK_ERROR`, `LOAD_SUPERSEDED` (a newer `loadMIDIUrl()` or a direct `loadMIDI()` came first), `SYNTH_DISPOSED`, or an `SMF_*` code from `loadMIDI()`; with `opts.signal`'s reason when that `AbortSignal` aborts (an `AbortError` if the reason is missing or falsy); or with a `TypeError` for a missing `url` or an `opts.signal` that is not an `AbortSignal` (for example an `AbortController` passed instead of its `.signal`). It never throws (an `opts` whose `signal` cannot be read rejects with that error). Fire and forget is safe: `synth.loadMIDIUrl("song.mid")` leaves no unhandled rejection. To show errors: `synth.loadMIDIUrl(url).then(() => synth.playMIDI(), (e) => show(e.code || e.name))`.
 
 **playMIDI()**
-> play loaded MIDI data. On a finished song, starts again from the beginning at the song's initial tempo and channel state. Does nothing for a song with no playable events. The first `playMIDI()` on each context installation first generates the metallic noise (see `prewarm()`, 20–47 ms on a desktop) and only then reads the clock, so the song starts slightly later and nothing within it shifts.
+> play loaded MIDI data. On a finished song, starts again from the beginning at the song's initial tempo and channel state. Does nothing for a song with no playable events. A looping song that cannot advance (all events on one tick with `loopEnd` unset) plays once and stops. Each timer callback processes at most 1000 events; the rest follow in order. Replay does not cut notes still sounding from the previous pass. The first `playMIDI()` on each context installation first generates the metallic noise (see `prewarm()`) and only then reads the clock, so the song starts slightly later and nothing within it shifts.
 
 **stopMIDI()**
 > stop playing MIDI data. Every sounding or scheduled note and drum hit stops, and channel volume, pan and modulation changes scheduled for later are cancelled, so nothing changes after the stop. When `playMIDI()` resumes, it first gives every channel its latest volume, expression, pan and modulation: the values the song had set up to the resume position (including changes it had sent ahead of the stop) and your own, including a change you had scheduled for later with a time. Notes that were due in the 0.2 s after the stop are not replayed, as upstream.
 
 **locateMIDI(tick)**
-> locate current playing position in tick. Playback resumes at the first event at or after `tick`. Tempo and channel state are rebuilt from the song up to `tick`, replacing manual channel changes (see [What behaves differently](#about-this-fork)).
+> locate current playing position in tick. Playback resumes at the first event at or after `tick`. Rebuilds tempo, programs, controllers, bend/range, RPN and SysEx tuning from the song up to `tick`, replacing manual and queued channel changes. Engine settings and timbres are kept. Does nothing without a loaded song.
 
 **getPlayStatus()**
 > get current MIDI sequence play status.
@@ -312,14 +255,14 @@ Almost function has the timestamp, `t` parameter. That specify accurate timing o
 **resetAllControllers(ch)**
 > Control parameters of specified ch are reset. It includes Bend / Modulation / Expression / Sustain.
 
-## MIDI implimentation chart
+## MIDI implementation chart
 
 |                        |Recognized|Description                     |
 |------------------------|----------|--------------------------------|
 |**Basic Channel**       | Yes      | 1-16. ch10 = drum track        |
 |**NoteOn / NoteOff**    | Yes      | note# 0-127 / velocity 0-127   |
 |**Polyphonic Pressure** | No       |                                |
-|**Control Change**      | Yes      | see bellow                     |
+|**Control Change**      | Yes      | see below                     |
 |**Program Change**      | Yes      | program 0-127                  |
 |**Channel Pressure**    | No       |                                |
 |**Pitch Bend**          | Yes      | -8192 - +8191                  |
@@ -389,65 +332,42 @@ Like the other numeric fields, `ff`, `fq` and `fk` also accept a numeric string 
 
 The filter is fixed for the life of the note, and is released with the voice. Example, a hi-hat through a 3 kHz high-pass: `[{w:"n1",t:0,f:440,v:0.3,d:0.04,fl:"highpass",ff:3000}]`.
 
-You can test how these parameter work with 'Timbre Editor' panel in 'soundedit.html'.  And the created timbre can be used with `setTimbre()` function.
+Use the Timbre Editor in `soundedit.html` to audition parameters and generate a `setTimbre()` array.
 
-## Development
+## Development and testing
 
-Use Node 24.21.0 (`.nvmrc`), which comes with npm 11.19.0, and install the locked development tools with `npm ci`. The library itself has no dependencies.
+Use the Node version in [.nvmrc](.nvmrc) and `npm ci` to install locked development tools. The runtime library has no dependencies. Test runners use POSIX process groups and run on Linux/macOS.
 
-| Command | What it does |
+| Command | Purpose |
 | --- | --- |
-| `npm run lint` | ESLint with the recommended rules (`eslint.config.mjs`). |
-| `npm run build` | Minifies `webaudio-tinysynth.js` into `webaudio-tinysynth.min.js` and its source map with the pinned Terser. Every option is in `scripts/build.js`. `npm run build -- DIR` writes them to `DIR` instead of the repository root. CI runs this build after each merge; see below. |
-| `npm run verify` | Rebuilds into a temporary directory and fails if the committed `webaudio-tinysynth.min.js` or its map differ. Also fails if the minified file or the source contains `</script`, `<script` or `<!--` in any letter case, or a non-ASCII byte. Prints sizes and SHA-256. |
-| `npm run size` | Raw size, gzip size and SHA-256 of the source and of a fresh build of it (minified file and map). |
-| `npm run bench -- node` / `npm run bench -- browser` | Initialization cost (#18): constructor, `setAudioContext()` parts, first-note readiness, graph size and a dense chord. `node` uses the mock WebAudio for the breakdown; `browser` drives Chromium, Firefox and WebKit through Playwright, cold and warm, for both qualities, reverb on and off, and 44.1 and 48 kHz. `--src=FILE` measures another copy of the library, such as the base commit's source; see the header of `scripts/bench-init.js`. Results: [tasks/T8.md](docs/improvements/tasks/T8.md). |
-| `npm run pack:check` | Checks the files `npm pack` would publish, then packs them with a fresh build of the minified file and map, installs the tarball in a scratch project outside the repository and `require()`s it there. |
-| `npm test` | `test:unit`, `test:node` and `test:regression`, in that order. It stops at the first failing suite. |
-| `npm run test:unit` | Vitest unit tests, `tests/unit/**/*.test.mjs` (`scripts/run-unit-tests.js` runs `vitest run`). |
-| `npm run test:node` | `node:test` tests, `tests/node/**/*.test.cjs` (`scripts/run-node-tests.js`), killed after 600 s. |
-| `npm run test:regression` | `tests/differential.js`, `tests/tempo.js` and `tests/loop-end.js`, each killed after 300 s. |
-| `npm run test:browser` | Offline smoke test of both builds in headless Chromium. Install the browser first with `npx playwright-core install --with-deps --only-shell chromium`. A missing browser fails the test. Chromium runs with autoplay allowed, so the test does not show that audio starts after a user gesture. |
+| `npm run lint` | ESLint recommended rules |
+| `npm run build -- .build` | Fresh minified file and map in an ignored directory |
+| `npm test` | Unit, native Node and regression suites |
+| `npm run test:unit` / `npm run test:node` / `npm run test:regression` | Individual suites |
+| `npm run test:browser` | Offline Chromium smoke test of source and fresh minified builds |
+| `npm run test:browser:matrix` | Chromium, Firefox and WebKit assertion matrix |
+| `npm run test:browser:demos` | Demo interactions; select an engine with `-- --engines=chromium` |
+| `npm run size` | Raw/gzip sizes and SHA-256 of source and fresh builds |
+| `npm run bench -- node` / `npm run bench -- browser` | Initialization benchmarks; see `scripts/bench-init.js` for options |
+| `npm run pack:check` | Verify package contents and install/require a freshly built tarball |
+| `npm run verify` | Check committed distribution bytes against a fresh build and inline-safety rules |
 
-- The regressions compare against upstream commit `3d75aee`, read from git history. Clone with full history (a shallow clone fails), or set `TINYSYNTH_REFERENCE` to upstream's `webaudio-tinysynth.js` at that commit.
-- Pull requests do not change `webaudio-tinysynth.min.js` or its map, except a release pull request (see "Releases" below), and nobody edits them by hand. After each merge into `improve/integration`, CI (`.github/workflows/dist.yml`) rebuilds both with the pinned build, runs the tests against the new bytes and commits them as `github-actions[bot]`, titled `Rebuild webaudio-tinysynth.min.js for <commit>`. The `build-verify` check fails a pull request that changes either file, unless its branch is `improve/integration` or `release/*` and both equal a fresh build. Restore them with `git checkout origin/<base branch> -- webaudio-tinysynth.min.js webaudio-tinysynth.min.js.map` and commit. `node scripts/check-dist.js --unchanged-from=origin/<base branch>` runs the same check locally.
-- The test commands, `pack:check` and `size` build the current source into the ignored `.build/` directory first and test that, never the committed `webaudio-tinysynth.min.js`, so they leave tracked files unchanged. To test another copy, set `TINYSYNTH_MIN=path/to/file.min.js`. A test file run on its own reads `.build/`; refresh it with `node scripts/test-build.js`.
-- The test commands fail closed. `test:unit` and `test:node` fail when no test file matches, when a file passes no test, when a `node:test` file exits before its tests finish, or when fewer files ran or fewer tests passed than the floors committed in `package.json` (`--min-files`, `--min-tests`). When you add tests, raise the floors to the new counts printed at the end of the run. `test:regression` and `test:browser` require each script to exit 0 and print a final `PASS:` line.
-- The test commands use POSIX process groups to stop hung tests, so they run on Linux and macOS.
-- CI (`.github/workflows/ci.yml`) runs the `lint`, `build-verify`, `test` and `browser-smoke` jobs on pull requests and on pushes to `main`. On pushes to `main` they build and test the current source but do not compare the committed minified file with it: between releases it may be older than the source.
-- The browser matrix (`.github/workflows/browser-matrix.yml`) runs on pull requests. Each engine's pre-existing assert specs are split across three `browser (ENGINE, K/3)` jobs, balanced by the measured seconds in `tests/browser/matrix.js` (`--shard=K/N`; `--list --shard=K/N` prints the layout). A `demos (ENGINE)` job runs `npm run test:browser:demos`. The `browser matrix` job rebuilds the aggregate checkout and checks every shard, demo job and case (`node scripts/browser-matrix.js --merge=DIR --expected-context=github`). It binds artifacts to the independently expected GitHub run, checked-out source/min hashes, matrix configuration, exact shard selection, and the resolved Playwright Core version plus `browsers.json` hash and exact browser revision bundle IDs (including the Chromium headless-shell bundle selected by `{ headless: true }` and `PLAYWRIGHT_CORE` overrides). Schema-v3 reports bind full-mix reference provenance as either a present reference content hash or an explicit absent marker, checked against the aggregate checkout. The resolver recognizes a unique manifest macOS WebKit revision override from the resolved executable path; native macOS runtime version and behavior remain unverified. These checks catch stale or misidentified reports, but report metadata is not a cryptographic producer attestation, and pull-request workflows remain PR-owned. The ordinary check retains the pre-existing assert matrix and does not require the unfinished full-mix reference set. The separate `workflow_dispatch` choice `mode: full-mix-qualification` runs the existing `render` and `full-mix` specs through the same runner and aggregate in a distinct `full-mix qualification aggregate` check. That strict lane includes render-matrix GM per-slot peak headroom and first-attempt full-mix/raw-reference requirements; its slot peaks retain measured precision for the full-scale check, while existing RMS formatting and ordinary-lane assertions remain unchanged. Missing or incomplete references and failed first captures keep it red. The qualification artifact is staged under `full-mix-qualification/browser-matrix/` so its uploaded `results.json` matches the aggregate's expected path. The fixture uses the pinned TinyChip regression input and synthetic `ws.mid` profile, not Casey's production MIDI/settings or composer approval. A new spec needs a `seconds` entry. To change the shard count, change the shard list, `SHARD` and the job name together. The organization must separately require the `browser matrix` check and enforce current-base/freshness rules; this change does not alter repository rulesets.
+Tests, `size` and `pack:check` build current source into ignored `.build/` and leave tracked distributions unchanged. To run a test file directly, refresh `.build/` with `node scripts/test-build.js`; `TINYSYNTH_MIN` selects another minified file. Regressions read upstream commit `3d75aee4b3f43cbd932265e7d60201fd5b770397` from full Git history, or from `TINYSYNTH_REFERENCE`. MIDI fixtures originate from [jazz-soft/test-midi-files](https://github.com/jazz-soft/test-midi-files).
 
-- The browser workflow uses Ubuntu 24.04 x64 runners (`ubuntu-24.04`) for the user-authorized PR #95 comparison with the retained ARM failures. Node, Playwright/browser pins, matrix membership and tolerances are unchanged. This runner change does not establish an ARM cause or qualify the release; historical first-attempt failures remain evidence.
+For browser checks, install the pinned Playwright browsers (`npx playwright-core install --with-deps`; Chromium smoke needs only `--only-shell chromium`). CI runs lint, build checks, tests, browser smoke and the sharded browser matrix. The smoke test allows autoplay and does not verify the user-gesture requirement.
 
-- The pull-request browser workflow opts into the exact exceptions in [the known-failures inventory](docs/improvements/known-failures.md). These include WebKit q1/program120 completed-short-note, q0/48 kHz/drum58 and q1/44.1 kHz/drum49 source/min, q0/48 kHz/drum53 repeat, and held-source q1/program119 at 0.0700 s failures documented in [issue #97](https://github.com/Provable-Games/webaudio-tinysynth/issues/97); their original assertions and tolerances still run. The gate rechecks provenance and raw Float32/WAV artifacts, recomputes each accepted GM/drum first-WAV comparison against its recorded difference and first-divergence index, verifies retained drum-repeat roles and kept-source identity, preserves failed raw statuses and checks in reports, and uses a separate validated view for core cross-engine comparisons. Unknown failures, malformed diagnostics, stale provenance, corrupt artifacts and launch/timeouts still fail ordinary CI. Optional strict full-mix runs keep their actual verdict and reject these exceptions; they are investigation tools rather than mandatory release certificates. The `--accept-known-failures` option is core-only.
-- When a `render` comparison fails on its first attempt, the runner can retain both original Float32 WAVs for up to six failed comparison pairs per case under `browser-matrix/<engine>/first-attempt-pcm/`. The ordinary shard artifact uploads these bounded files for diagnosis. Diagnostic rerenders are recorded separately and never replace the retained first attempt.
-- The strict full-mix lane independently checks fixture note/probe identities against the decoded manifest and derives first-attempt eligibility from the retained measurements, native creation/pruning evidence, page/rejection state and recomputed fault checks. The offline reference exporter rejects failed execution/cleanup assertions and fatal/launch-error engine state, worker timeouts/signals and unexpected worker exits, while allowing an otherwise clean first capture to bootstrap missing references. It reopens first-attempt WAVs and independently rechecks those conditions; prior-method captures or captures without page/abort diagnostics remain inspectable but cannot qualify under the current method. Original capture-method and tolerance hashes must also equal the current fixture contract, and both source/min first-capture method hashes must match it; internally consistent prior identities remain readable but unqualified. A producer's summary status alone cannot qualify a capture. It binds first and captured diagnostic WAVs to the exact fixture/rate/build/attempt path before opening them, then checks their saved status, raw bytes, digest and PCM hash. The exporter requires the observation-level and both source/min build-level first PCM comparisons to exactly match its comparison recomputed from the retained first-WAV pair. Original comparison values/digests and the recomputed digest remain visible; missing, null, malformed or contradictory comparisons are ineligible. A producer-shaped incomplete diagnostic repeat must retain its role, matching first verdict and nonempty error, but may omit its WAV without changing eligible attempt-1 status. Captured-repeat metric and comparison summaries are matched to recomputed raw-WAV observations under the current method; prior-method summaries and recomputed digests are retained separately without qualifying as current evidence. A diagnostic mismatch never replaces or promotes attempt 1, and a failed first attempt remains failed. For a manifest-declared WebKit revision override, the expected runtime version is null, but the observed runtime version must still be nonempty; default browser bundles retain exact version pins. Native macOS runtime and behavior are unverified.
-- A local render diagnostic can use a non-default seed without artifact output, for example `npm run test:browser:chromium -- --specs=render --seed=1`. The producer validates against the requested seed and records browser-declared and Node-validated generated-buffer dimensions, lengths and digest at their separate stages. Without `--out`, local checks do not claim sidecar retention; uploaded CI reports must retain the Float32 sidecars, which the aggregate reopens and validates against its independent manifest. On generated-buffer integrity failures only, the producer records fixed digest-descriptor snapshots and map-entry identity/channel observations from digest creation through renderReturn and single-part combine to the existing save/row/comparison stages, including identity checks against the created digest. Runtime details are sanitized and the diagnostic context is capped at 4,096 characters. Successful reports, schema, and integrity verdicts are unchanged; this evidence does not establish a cause or use an external hook.
-- Full-mix fixture eligibility and reference use require the pinned `MATRIX.seed`, which is included in the fixture settings hash and retained capture metadata. For the current method, each reported attempt-1 metric object must match metrics recomputed from that build's retained WAV; missing, null or contradictory metrics cannot qualify. Prior-method metrics remain inspectable but do not qualify under the current method.
+Ordinary browser CI accepts only the narrowly approved exceptions in [tests/browser/lib/known-failures.js](tests/browser/lib/known-failures.js), tracked in [#96](https://github.com/Provable-Games/webaudio-tinysynth/issues/96) and [#97](https://github.com/Provable-Games/webaudio-tinysynth/issues/97). Local defaults remain strict. Original failed assertions, tolerances and first-attempt artifacts remain preserved; clean diagnostic rerenders do not clear a failed first attempt. Original capture evidence is retained outside this repository. Unknown failures remain blocking. The manual `full-mix-qualification` workflow lane remains strict and does not use these exceptions; incomplete references or failed first captures prevent qualification. Native macOS runtime behavior remains unverified.
 
-## Verifying the minified build
+Agent work commands, repository constraints and AI-review configuration are in [AGENTS.md](AGENTS.md).
 
-The onchain player embeds the exact bytes of `webaudio-tinysynth.min.js` and publishes their SHA-256. To check that a copy was built from this source:
+## Distribution verification and releases
 
-1. Check out a release tag (`vX.Y.Z`) or a `Rebuild webaudio-tinysynth.min.js for …` commit by `github-actions[bot]` on `improve/integration`, with full history and LF line endings (on Windows, `git clone -c core.autocrlf=false`). Use the Node version in `.nvmrc`, and run `npm ci`.
-2. Run `npm run verify`. It rebuilds the minified file and its map with the pinned Terser, requires both to equal the committed files byte for byte, and prints their SHA-256.
-3. Hash your copy (`sha256sum webaudio-tinysynth.min.js`, or `shasum -a 256` on macOS) and compare.
+Feature PRs never commit `webaudio-tinysynth.min.js` or its map. After each merge into `improve/integration`, [Dist CI](.github/workflows/dist.yml) builds, tests and commits both generated files. On `main`, distributions change only through a manual release PR; an integration-to-main PR can serve as the release PR when its version and generated files are current. Between releases they may lag source. The PR build check permits distribution changes only from `improve/integration` or `release/*`, and requires fresh build bytes.
 
-Elsewhere on `main`, the committed minified file may be older than the source, and `npm run verify` fails there. So does `improve/integration` right after a merge, until CI's rebuild commit lands (about ten minutes).
+To verify an embedded copy, check out a release tag or CI rebuild commit with full history and LF line endings, run `npm ci` and `npm run verify`, then compare your copy's SHA-256. Verification fails when committed distributions lag source, including the interval before integration's rebuild lands. The build keeps the license header, public names and ASCII-only inline-safe output (no `</script`, `<script` or `<!--`); the map is separate, with no `sourceMappingURL` comment.
 
-The minified file starts with the source's license header and has no `sourceMappingURL` comment; to debug it, load `webaudio-tinysynth.min.js.map` next to it. Minification renames local variables only: the class, its methods, options and properties keep their names.
+Releases are manual:
 
-### Releases
-
-On `main`, the minified file and its map change only in a release, made by hand. The steps for the first release, `v2.0.0`, cut once `improve/integration` has been merged into `main`:
-
-1. Review the `improve/integration` pull request into `main` after CI has regenerated the distribution. It already carries version 2.0.0 and both generated files; `build-verify` requires them to equal a fresh build. The user merges it. A separate `release/v2.0.0` PR is needed only if the version, source or generated files still need changes.
-2. From a clean checkout of the resulting `main` commit, run `npm ci`, `npm run verify` and `npm run pack:check`. Perform focused sound checks with the current Casey scores. There is no mandatory production-MIDI certificate or separate device-qualification project; ongoing composer listening complements the existing regression checks.
-3. The user signs and pushes the tag: `git tag -s v2.0.0 <reviewed main sha>` and `git push origin v2.0.0`. From a checkout of that tag, create `SHA256SUMS` with `sha256sum webaudio-tinysynth.min.js webaudio-tinysynth.min.js.map > SHA256SUMS`.
-4. The user publishes `gh release create v2.0.0 webaudio-tinysynth.min.js webaudio-tinysynth.min.js.map SHA256SUMS --notes-file <notes>`. Include the behavior summary, tool versions, hashes and sizes from `npm run size`, and the verbatim `npm run verify` output in the notes. Consumers pin the published tag and verify the embedded bytes.
-
-## License
-
-Licensed under the Apache License, Version 2.0
-
-This fork's modifications are listed in [NOTICE](./NOTICE).
+1. Use the integration-to-main PR if it already contains the release version and fresh generated files. Otherwise, create `release/vX.Y.Z` from `main`, set the version with `npm version X.Y.Z --no-git-tag-version`, run `npm run build`, commit the generated files, and open a PR into `main`.
+2. After the release PR passes checks and the maintainer merges it, verify the clean merge with `npm ci` and `npm run verify`. The maintainer signs and pushes the tag: `git tag -s vX.Y.Z <merge-sha>` and `git push origin vX.Y.Z`.
+3. From the tag, the maintainer publishes with `gh release create vX.Y.Z webaudio-tinysynth.min.js webaudio-tinysynth.min.js.map`, including sizes and SHA-256 from `npm run size` in the notes. Focused listening is part of normal release checks.

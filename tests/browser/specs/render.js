@@ -709,7 +709,7 @@ function cases(shared) {
           };
           /*
            * Same-engine comparisons (#78). WebKit occasionally renders a segment that differs from
-           * an otherwise identical render (up to 0.56 on arm64 CI; tasks/T13.1.md measures it).
+           * an otherwise identical render (measured up to 0.56 on arm64 CI).
            * That is a lost or broken note, so the FIRST attempt decides: two renders that must agree
            * and differ beyond the tolerance fail the check, and a clean re-render does not clear it
            * (lib/first-attempt.js). The tolerance is the measured summation-order one and is not
