@@ -44,9 +44,9 @@
 
     /* Observe actual sources created by _note, including percussion _src items. */
     var noteCreations = [], prunedInstances = [], originalNote = synth._note, originalPrune = synth._pruneNote;
-    synth._pruneNote = function (nt, time) {
+    synth._pruneNote = function (nt) {
       prunedInstances.push({ channel: nt.ch, pitch: nt.n, timeSec: nt.t, program: this.pg[nt.ch] });
-      return originalPrune.call(this, nt, time);
+      return originalPrune.call(this, nt);
     };
     synth._note = function (time, channel, pitch, velocity, patch) {
       var beforeVoices = this.notetab.length, beforeSources = this._src.length;

@@ -357,14 +357,11 @@ describe.each(variants)("$name: short notes (#59)", (variant) => {
     });
   });
 
-  describe("notes whose attacks have all ended make exactly upstream's calls without voice eviction (raw 3d75aee, no patches)", () => {
+  describe("notes whose attacks have all ended make exactly upstream's calls (raw 3d75aee, no patches)", () => {
     const upstream = { source: H.upstreamSource(), name: "upstream@3d75aee" };
     test.each([0, 1])("quality %i: every built-in program, released after its longest attack", (quality) => {
       const run = (v) => {
-        // This fixture submits 256 notes at a fixed mock currentTime, in addition to the
-        // constructor's tracked warm-up voice. Keep the cap at their 257-voice total so this
-        // #59 release comparison does not also test #68 voice eviction.
-        const s = synthFor(v, { quality, voices: 257 });
+        const s = synthFor(v, { quality });
         const maxA = Math.max(...s.synth.program.flatMap((x) => x.p.map((o) => o.a)));
         const from = s.trace.length;
         let t = 1;
@@ -376,13 +373,11 @@ describe.each(variants)("$name: short notes (#59)", (variant) => {
             t += 3;
           }
         }
-        return { calls: s.trace.slice(from), voices: s.synth.notetab.length };
+        return s.trace.slice(from);
       };
       const fork = run(variant), up = run(upstream);
-      expect(fork.voices).toBe(257);
-      expect(up.voices).toBe(257);
-      expect(fork.calls.length).toBeGreaterThan(2000);
-      expect(fork.calls).toEqual(up.calls);
+      expect(fork.length).toBeGreaterThan(2000);
+      expect(fork).toEqual(up);
     }, INSTALLS_TIMEOUT);
   });
 });
