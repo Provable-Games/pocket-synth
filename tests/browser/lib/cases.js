@@ -199,7 +199,11 @@ class EngineSession {
     for (const rec of opened) {
       if (rec.page) await withTimeout(rec.page.close({ runBeforeUnload: false }), CLOSE_TIMEOUT_MS);
       const cr = await withTimeout(rec.context.close(), CLOSE_TIMEOUT_MS);
-      if (!cr.ok && !cr.error) wedged = true;
+      if (!cr.ok) {
+        wedged = true;
+        record.check("every page context the case opened was closed", false,
+          (cr.timedOut ? "context close exceeded " + CLOSE_TIMEOUT_MS / 1000 + " s" : "context close failed: " + short(cr.error)) + "; browser relaunched");
+      }
     }
     // Extra browsers, including late ones whose first close failed. A browser
     // that is still connected after another attempt cannot be relaunched like

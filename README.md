@@ -362,12 +362,12 @@ Agent work commands, repository constraints and AI-review configuration are in [
 
 ## Distribution verification and releases
 
-Feature PRs never commit `webaudio-tinysynth.min.js` or its map. After each merge into `improve/integration`, [Dist CI](.github/workflows/dist.yml) builds, tests and commits both generated files. On `main`, distributions change only through a manual release PR; between releases they may lag source. The PR build check permits distribution changes only from `improve/integration` or `release/*`, and requires fresh build bytes.
+Feature PRs never commit `webaudio-tinysynth.min.js` or its map. After each merge into `improve/integration`, [Dist CI](.github/workflows/dist.yml) builds, tests and commits both generated files. On `main`, distributions change only through a manual release PR; an integration-to-main PR can serve as the release PR when its version and generated files are current. Between releases they may lag source. The PR build check permits distribution changes only from `improve/integration` or `release/*`, and requires fresh build bytes.
 
 To verify an embedded copy, check out a release tag or CI rebuild commit with full history and LF line endings, run `npm ci` and `npm run verify`, then compare your copy's SHA-256. Verification fails when committed distributions lag source, including the interval before integration's rebuild lands. The build keeps the license header, public names and ASCII-only inline-safe output (no `</script`, `<script` or `<!--`); the map is separate, with no `sourceMappingURL` comment.
 
 Releases are manual:
 
-1. From `main`, create `release/vX.Y.Z`. Set the version in `package.json` and `package-lock.json`, if not already set, with `npm version X.Y.Z --no-git-tag-version`, run `npm run build`, and commit both generated files.
-2. Open a PR into `main`. After its checks pass and it is merged, sign and push the release tag: `git tag -s vX.Y.Z <merge-sha>` and `git push origin vX.Y.Z`.
-3. From the tag, run `gh release create vX.Y.Z webaudio-tinysynth.min.js webaudio-tinysynth.min.js.map`, including sizes and SHA-256 from `npm run size` in the notes.
+1. Use the integration-to-main PR if it already contains the release version and fresh generated files. Otherwise, create `release/vX.Y.Z` from `main`, set the version with `npm version X.Y.Z --no-git-tag-version`, run `npm run build`, commit the generated files, and open a PR into `main`.
+2. After the release PR passes checks and the maintainer merges it, verify the clean merge with `npm ci` and `npm run verify`. The maintainer signs and pushes the tag: `git tag -s vX.Y.Z <merge-sha>` and `git push origin vX.Y.Z`.
+3. From the tag, the maintainer publishes with `gh release create vX.Y.Z webaudio-tinysynth.min.js webaudio-tinysynth.min.js.map`, including sizes and SHA-256 from `npm run size` in the notes. Focused listening is part of normal release checks.

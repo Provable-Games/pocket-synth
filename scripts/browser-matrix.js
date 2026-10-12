@@ -999,13 +999,13 @@ function parseFloatFirstAttemptWav(bytes, expectedSampleRate, expectedChannels, 
 
 function firstAttemptPcmArtifactProblems(engine, rel, resultFile, c, classification) {
   const noises = c && c.spec === "render" && classification
-    ? classification.failures.filter((failure) => failure.splitMeasurementGroup) : [];
+    ? classification.failures.filter((failure) => failure.measurementGroup) : [];
   if (!noises.length) return [];
   const problems = [], seenPairs = new Set(), captures = new Map();
   const add = (message) => problems.push(rel + ": " + engine + " / " + c.id + " " + message);
   if (!resultFile) return [rel + ": " + engine + " / " + c.id + " known render exception requires retained first-attempt PCM WAVs"];
   for (const { failure, group } of noises.flatMap((noise) => noise.firstAttemptFailures.map((failure) =>
-    ({ failure, group: noise.splitMeasurementGroup })))) {
+    ({ failure, group: noise.measurementGroup })))) {
     const scenario = SCENARIOS.find((item) => item.name === group);
     const repeat = failure.item.endsWith(" repeat");
     const roles = repeat ? { a: "repeat", b: "kept source" } : { a: "source", b: "min" };
@@ -1066,6 +1066,13 @@ function firstAttemptPcmArtifactProblems(engine, rel, resultFile, c, classificat
     }
     if (sides.length === 2) {
       captures.set(failure.item, sides);
+      if (failure.item === "gm-drums drum 53 repeat") {
+        const sourceHashes = c.observations && c.observations["first-source planar PCM SHA-256"];
+        const hashes = sourceHashes && sourceHashes[group];
+        if (!Array.isArray(hashes) || hashes.length !== scenario.items.length ||
+            hashes[scenario.items.indexOf(fixture)] !== sides[1].side.planarPcmSha256)
+          add("retained drum-53 repeat does not compare against the recorded first source capture");
+      }
       const [source, min] = sides;
       if (source.side.frames !== min.side.frames || source.side.sampleRate !== min.side.sampleRate || source.side.channels !== min.side.channels) {
         add("known source/min first-attempt PCM WAV dimensions differ for " + failure.item);

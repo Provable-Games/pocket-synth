@@ -5,7 +5,7 @@ const { MATRIX } = require("../matrix");
 const { tolerances } = require("../tolerances");
 const FIRST_ATTEMPT = require("./first-attempt");
 
-const POLICY_ID = "p1-a2-known-failures-v4";
+const POLICY_ID = "p1-a2-known-failures-v9";
 const BUFFER_OBSERVATION = "generated buffer SHA-256 (first reverb-enabled attempt)";
 const FAILURE_OBSERVATION = "first-attempt same-engine failures and their diagnostic re-renders (the verdict is the first attempt's; a clean re-render does not clear it)";
 const SHORT_FAILURE_OBSERVATION = "first-attempt failures and their diagnostic re-renders (the verdict is the first attempt's; a clean re-render does not clear it)";
@@ -45,6 +45,9 @@ function expectedNoiseFor(engine, c) {
   if (c.id === "render q1 48000" && c.dims.quality === 1 && c.dims.sampleRate === 48000)
     return [{ group: DRUM_GROUP, slots: 47, signature: "webkit-drum54-q1-48000-first-attempt", minimumFailures: 2,
       items: [DRUM_GROUP + " drum 54 source/min", DRUM_GROUP + " drum 54 repeat"] }];
+  if (c.id === "render q1 44100" && c.dims.quality === 1 && c.dims.sampleRate === 44100)
+    return [{ group: DRUM_GROUP, slots: 47, signature: "webkit-drum49-q1-44100-first-attempt", minimumFailures: 1,
+      items: [DRUM_GROUP + " drum 49 source/min"] }];
   const targets = [], target = RENDER_NOISE.get(c.id);
   if (target && c.dims.quality === target.quality && c.dims.sampleRate === target.sampleRate)
     targets.push({ group: RENDER_GROUP, slots: 32, signature: "webkit-noise-gm-first-attempt", minimumFailures: 1,
@@ -52,6 +55,9 @@ function expectedNoiseFor(engine, c) {
   if (c.id === "render q0 48000" && c.dims.quality === 0 && c.dims.sampleRate === 48000)
     targets.push({ group: DRUM_GROUP, slots: 47, signature: "webkit-drum58-q0-48000-first-attempt", minimumFailures: 1,
       items: [DRUM_GROUP + " drum 58 source/min"] });
+  if (c.id === "render q0 48000" && c.dims.quality === 0 && c.dims.sampleRate === 48000)
+    targets.push({ group: DRUM_GROUP, slots: 47, signature: "webkit-drum53-q0-48000-repeat-first-attempt", minimumFailures: 1,
+      repeatOnly: true, items: [DRUM_GROUP + " drum 53 repeat"] });
   return targets;
 }
 
@@ -137,10 +143,17 @@ function knownNoiseFailures(engine, c) {
         if (matchingChecks.length !== 1 || matchingChecks[0].detail !== expectedDetail) return null;
       }
       const measurements = c.observations && c.observations.measurements;
-      if (!isRecord(measurements) || Object.prototype.hasOwnProperty.call(measurements, group) ||
+      if (!isRecord(measurements)) return null;
+      const parityFailed = first.failures.some((failure) => failure.item.startsWith(group + " ") && failure.item.endsWith(" source/min"));
+      const unified = target.repeatOnly && !parityFailed;
+      if (unified ? !validGmMeasurement(measurements[group], slots) ||
+          Object.prototype.hasOwnProperty.call(measurements, group + "/source") ||
+          Object.prototype.hasOwnProperty.call(measurements, group + "/min") :
+          Object.prototype.hasOwnProperty.call(measurements, group) ||
           !validGmMeasurement(measurements[group + "/source"], slots) ||
           !validGmMeasurement(measurements[group + "/min"], slots)) return null;
-      classifications.push({ signature: target.signature, checkNames, splitMeasurementGroup: group, splitMeasurementSlots: slots,
+      classifications.push({ signature: target.signature, checkNames, measurementGroup: group,
+        ...(!unified ? { splitMeasurementGroup: group, splitMeasurementSlots: slots } : {}),
         evidenceItems: failures.map((failure) => failure.item), firstAttemptFailures: failures });
     }
     return classifications;

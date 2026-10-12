@@ -637,6 +637,42 @@ test("--list --shard prints the declared layout without launching a browser", ()
   for (let k = 1; k <= MATRIX.shards; ++k) assert.match(r.out, new RegExp("shard " + k + "/" + MATRIX.shards));
 });
 
+test("case cleanup failures remain failures after browser recovery; healthy cleanup passes", async () => {
+  const { EngineSession } = require("../browser/lib/cases");
+  for (const mode of ["healthy", "reject", "timeout"]) {
+    let launches = 0, oldClosed = false;
+    const context = {
+      newPage: async () => ({ on() {}, close: async () => {} }),
+      close: () => mode === "reject" ? Promise.reject(new Error("mock context close rejection"))
+        : mode === "timeout" ? new Promise(() => {}) : Promise.resolve(),
+    };
+    const session = new EngineSession({ engine: "chromium", log: () => {}, playwright: { chromium: {
+      launch: async () => {
+        const initial = ++launches === 1;
+        let connected = true;
+        return { version: () => "mock", isConnected: () => connected, newContext: async () => context,
+          close: async () => { connected = false; if (initial) oldClosed = true; } };
+      },
+    } } });
+    await session.launch();
+    try {
+      const result = await session.run({ id: mode, spec: "render", kind: "assert", deadline: 1,
+        run: async (t) => { await t.newPage(); t.check("body passed", true); } }, {});
+      assert.equal(result.status, mode === "healthy" ? "pass" : "fail");
+      assert.equal(session.relaunches, mode === "healthy" ? 0 : 1);
+      assert.equal(launches, mode === "healthy" ? 1 : 2);
+      assert.equal(session.fatal, null, "recovery can continue without approving the failed case");
+      if (mode !== "healthy") {
+        assert.equal(oldClosed, true);
+        const failed = result.checks.filter((check) => !check.ok);
+        assert.equal(failed.length, 1);
+        assert.equal(failed[0].name, "every page context the case opened was closed");
+        assert.match(failed[0].detail, mode === "timeout" ? /exceeded 5 s/ : /mock context close rejection/);
+      }
+    } finally { await session.closeBrowser(); }
+  }
+});
+
 test("worker guard accepts an observed declared-override version but stays strict for pinned and blank versions", async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "matrix-worker-version-"));
   const packageDir = path.join(root, "node_modules", "playwright-core");
@@ -944,8 +980,9 @@ function mutateKnownRenderFailure(files, { descriptor = true, caseId = "render q
   const minPlanar = Buffer.from(minSamples.buffer, minSamples.byteOffset, minSamples.byteLength);
   const wavs = { a: testAnalysis.wav([samples], sampleRate), b: testAnalysis.wav([minSamples], sampleRate) };
   const pairBase = "first-attempt-pcm/q" + c.dims.quality + "-" + sampleRate + "/pair-" + String(pairIndex).padStart(3, "0");
+  const repeat = item.endsWith(" repeat"), roles = repeat ? { a: "repeat", b: "kept source" } : { a: "source", b: "min" };
   const sides = {};
-  for (const [key, role, suffix] of [["a", "source", "first-a.wav"], ["b", "min", "first-b.wav"]]) {
+  for (const [key, role, suffix] of [["a", roles.a, "first-a.wav"], ["b", roles.b, "first-b.wav"]]) {
     const file = pairBase + "-" + suffix;
     ATTACHMENTS.set(path.posix.join(root, "browser-matrix", "webkit", file), wavs[key]);
     const planar = key === "a" ? sourcePlanar : minPlanar;
@@ -958,7 +995,7 @@ function mutateKnownRenderFailure(files, { descriptor = true, caseId = "render q
   const pcmRetention = {
     schemaVersion: 1, pairIndex, label: item,
     planarPcmEncoding: "IEEE-754 binary32 little-endian; planar channel order",
-    roles: { a: "source", b: "min" }, saved: true, status: "saved", a: sides.a, b: sides.b,
+    roles, saved: true, status: "saved", a: sides.a, b: sides.b,
   };
   const outcome = {
     item,
@@ -975,10 +1012,17 @@ function mutateKnownRenderFailure(files, { descriptor = true, caseId = "render q
   c.observations[knownFailurePolicy.FAILURE_OBSERVATION] = summary;
   const measurements = c.observations.measurements;
   const row = measurements[group];
-  delete measurements[group];
-  measurements[group + "/source"] = structuredClone(row);
-  measurements[group + "/min"] = structuredClone(row);
-  const groupCheck = group + ": min renders the same PCM as source (max |diff| <= " + String(tolerance) + ")";
+  if (!repeat) {
+    delete measurements[group];
+    measurements[group + "/source"] = structuredClone(row);
+    measurements[group + "/min"] = structuredClone(row);
+  } else {
+    c.observations["first-source planar PCM SHA-256"] = {
+      [group]: Array.from({ length: row.rms.length }, () => sides.b.planarPcmSha256),
+    };
+  }
+  const groupCheck = group + (repeat ? ": a repeat render in a fresh page matches" : ": min renders the same PCM as source") +
+    " (max |diff| <= " + String(tolerance) + ")";
   c.checks = [
     { name: knownFailurePolicy.BUFFER_CHECK, ok: false, detail: "synthetic final convBuf channel metadata contradiction" },
     { name: knownFailurePolicy.SEED_CHECK, ok: false, detail: "generated-buffer integrity prerequisite failed" },
@@ -1206,27 +1250,90 @@ test("short-notes q1/program126 is accepted without a nonexistent PCM retention 
   assert.match(unlisted.out, /failed check: every program with an attack/);
 });
 
-test("drum58 q0/48 kHz accepts only source/min with retained raw failures and strict-default rejection", () => {
-  const strict = merged((files) => { mutateKnownDrum58Failure(files); });
-  assert.equal(strict.status, 1, strict.out);
-  let rawCase;
-  const accepted = merged((files) => { rawCase = mutateKnownDrum58Failure(files).report; },
-    TEST_REFERENCE_BYTES, null, "core", "core", {}, true);
-  assert.equal(accepted.status, 0, accepted.out);
-  assert.match(accepted.out, /PASS WITH ACCEPTED KNOWN FAILURES/);
-  assert.equal(rawCase.status, "fail");
-  assert.equal(rawCase.checks[0].ok, false);
-  assert.match(accepted.out, /webkit-drum58-q0-48000-first-attempt/);
-  for (const mutate of [
-    (c) => { c.observations[knownFailurePolicy.FAILURE_OBSERVATION].failures[0].item = "gm-drums drum 59 source/min"; },
-    (c) => { c.dims.quality = 1; },
-    (c) => { c.dims.sampleRate = 44100; },
-    (c) => { c.checks[0].name = "gm-drums: a repeat render in a fresh page matches (max |diff| <= 0.000001)"; },
-    (c) => { c.observations.measurements["gm-drums/min"].peaks.pop(); },
+test("approved drum scopes retain raw failures and reject neighboring cases and corrupt captures", () => {
+  for (const { caseId, drum, suffix, otherQuality, otherRate, signature } of [
+    { caseId: "render q0 48000", drum: 58, suffix: "source/min", otherQuality: "render q1 48000", otherRate: "render q0 44100", signature: "webkit-drum58-q0-48000-first-attempt" },
+    { caseId: "render q1 44100", drum: 49, suffix: "source/min", otherQuality: "render q0 44100", otherRate: "render q1 48000", signature: "webkit-drum49-q1-44100-first-attempt" },
+    { caseId: "render q0 48000", drum: 53, suffix: "repeat", otherQuality: "render q1 48000", otherRate: "render q0 44100", signature: "webkit-drum53-q0-48000-repeat-first-attempt" },
   ]) {
-    const rejected = merged((files) => { mutate(mutateKnownDrum58Failure(files).report); },
+    const fixture = (files, id = caseId, note = drum) => mutateKnownRenderFailure(files, {
+      descriptor: false, caseId: id, group: knownFailurePolicy.DRUM_GROUP, item: "gm-drums drum " + note + " " + suffix,
+    });
+    const strict = merged((files) => { fixture(files); });
+    assert.equal(strict.status, 1, strict.out);
+    let rawCase;
+    const accepted = merged((files) => { rawCase = fixture(files).report; },
       TEST_REFERENCE_BYTES, null, "core", "core", {}, true);
-    assert.equal(rejected.status, 1, rejected.out);
+    assert.equal(accepted.status, 0, accepted.out);
+    assert.match(accepted.out, /PASS WITH ACCEPTED KNOWN FAILURES/);
+    assert.equal(rawCase.status, "fail");
+    assert.equal(rawCase.checks[0].ok, false);
+    assert.ok(accepted.out.includes(signature), accepted.out);
+    if (suffix === "repeat") {
+      assert.ok(rawCase.observations.measurements["gm-drums"], "passing parity measurements remain unified");
+      assert.equal(knownFailurePolicy.classifyKnownCase("webkit", rawCase).failures[0].splitMeasurementGroup, undefined);
+      const contradictory = merged((files) => {
+        const c = fixture(files).report, m = c.observations.measurements;
+        m["gm-drums/source"] = structuredClone(m["gm-drums"]);
+        m["gm-drums/min"] = structuredClone(m["gm-drums"]);
+        m["gm-drums/min"].rms = m["gm-drums/min"].rms.map((x) => x / 10);
+        delete m["gm-drums"];
+      }, TEST_REFERENCE_BYTES, null, "core", "core", {}, true);
+      assert.equal(contradictory.status, 1, contradictory.out);
+      const combined = merged((files) => {
+        const c = fixture(files).report;
+        const repeatCheck = structuredClone(c.checks[0]);
+        const repeatFailure = structuredClone(c.observations[knownFailurePolicy.FAILURE_OBSERVATION].failures[0]);
+        mutateKnownRenderFailure(files, { descriptor: false, caseId, group: knownFailurePolicy.DRUM_GROUP,
+          item: "gm-drums drum 58 source/min", pairIndex: 2 });
+        c.checks.push(repeatCheck);
+        const summary = c.observations[knownFailurePolicy.FAILURE_OBSERVATION];
+        summary.failures.push(repeatFailure);
+        summary.firstAttemptFailures = summary.intermittent = summary.diagnosticRenderAttempts = 2;
+        summary.rendersIncludingFirstAttempts = 270;
+        summary.diagnosticBudget.unspent = 4;
+      }, TEST_REFERENCE_BYTES, null, "core", "core", {}, true);
+      assert.equal(combined.status, 0, combined.out);
+      const missingSourceIdentity = merged((files) => {
+        delete fixture(files).report.observations["first-source planar PCM SHA-256"];
+      }, TEST_REFERENCE_BYTES, null, "core", "core", {}, true);
+      assert.equal(missingSourceIdentity.status, 1, missingSourceIdentity.out);
+      const substituted = merged((files) => {
+        const c = fixture(files).report;
+        const retained = c.observations[knownFailurePolicy.FAILURE_OBSERVATION].failures[0].firstAttempt.pcmRetention;
+        const key = path.posix.join(Object.keys(files).find((rel) => files[rel].webkit && files[rel].webkit.cases.includes(c)).split("/")[0],
+          "browser-matrix", "webkit", retained.b.path);
+        const wav = Buffer.from(ATTACHMENTS.get(key));
+        wav.writeFloatLE(wav.readFloatLE(44 + 30000 * 4) + 0.00002, 44 + 30000 * 4);
+        retained.b.wavSha256 = stableSha256(wav);
+        retained.b.planarPcmSha256 = stableSha256(wav.subarray(44));
+        ATTACHMENTS.set(key, wav);
+      }, TEST_REFERENCE_BYTES, null, "core", "core", {}, true);
+      assert.equal(substituted.status, 1, substituted.out);
+      assert.match(substituted.out, /does not compare against the recorded first source capture/);
+    }
+    for (const [id, note] of [[caseId, drum + 1], [otherQuality, drum], [otherRate, drum]]) {
+      const rejected = merged((files) => { fixture(files, id, note); },
+        TEST_REFERENCE_BYTES, null, "core", "core", {}, true);
+      assert.equal(rejected.status, 1, rejected.out);
+    }
+    for (const mutate of [
+      (c) => { c.checks[0].name = suffix === "repeat" ? "gm-drums: min renders the same PCM as source (max |diff| <= 0.000001)" : "gm-drums: a repeat render in a fresh page matches (max |diff| <= 0.000001)"; },
+      (c) => { c.observations.measurements[suffix === "repeat" ? "gm-drums" : "gm-drums/min"].peaks.pop(); },
+    ]) {
+      const rejected = merged((files) => { mutate(fixture(files).report); },
+        TEST_REFERENCE_BYTES, null, "core", "core", {}, true);
+      assert.equal(rejected.status, 1, rejected.out);
+    }
+    let wavPath;
+    const corrupted = merged((files) => { wavPath = fixture(files).wavPaths[1]; },
+      TEST_REFERENCE_BYTES, (dir) => {
+        const file = path.join(dir, wavPath), bytes = fs.readFileSync(file);
+        bytes[44] ^= 1;
+        fs.writeFileSync(file, bytes);
+      }, "core", "core", {}, true);
+    assert.equal(corrupted.status, 1, corrupted.out);
+    assert.match(corrupted.out, /known first-attempt PCM WAV is missing or invalid/);
   }
 });
 
