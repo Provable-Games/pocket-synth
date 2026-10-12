@@ -12,8 +12,7 @@
  *   - volume and expression: GM Level 1 recommended practice, gain = (value/127)^2;
  *   - pan: the Web Audio StereoPannerNode equal-power law for a mono input;
  *   - envelope: Web Audio AudioParam semantics (linear ramp, setTargetAtTime);
- * Two mappings are the library's own, documented by T0 and listed in
- * docs/improvements/tasks/T6.md: the pitch-bend unit (100/127 cent per
+ * Two mappings are the library's own: the pitch-bend unit (100/127 cent per
  * bend-range unit, where MIDI says 100/128) and the modulation depth
  * (CC1 value * 100/127 cents of 5 Hz vibrato). Pan uses the library's
  * (value - 64) / 64 position.
@@ -359,7 +358,7 @@ for (const useReverb of [0, 1]) {
  * OfflineAudioContext per item), so no earlier voice can sound in the slot
  * measured for it: with pruning stopped, a release tail lasts the whole
  * render. The warm-up note the library plays at construction stays far below
- * the audibility threshold in the slot (silent-program floor 2.3e-7, T6.md).
+ * the audibility threshold in the slot (silent-program floor 2.3e-7).
  *
  * Program notes are held 1.2 s, longer than the longest built-in attack
  * (a = 1 s). At baseline a note released before its attack ends is silent

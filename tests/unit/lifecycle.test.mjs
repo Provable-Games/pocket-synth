@@ -1,5 +1,5 @@
 /*
- * Lifecycle (#11, #12) under the D-018 contract (tasks/T4.md): constructor
+ * Lifecycle (#11, #12): constructor
  * options, lazy start, resume(), dispose(), context replacement, percussion
  * tracking (D-019) and the OfflineAudioContext rules, on the mock WebAudio of
  * tests/harness.js.

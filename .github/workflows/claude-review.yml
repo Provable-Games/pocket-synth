@@ -1,7 +1,8 @@
 # Claude review. The required check is the "Claude review gate" job.
 # Model and effort come only from the Actions variables CLAUDE_REVIEW_MODEL and
 # CLAUDE_REVIEW_EFFORT. The pinned base action below fixes the Claude Code version.
-# Setup, trust boundary and bootstrap rules: .github/scripts/README.md.
+# Setup, trust boundary and bootstrap rules: AGENTS.md.
+# Keep .github/prompts in sparse checkouts for legacy BASE helpers that read it.
 name: Claude Review
 
 on:
@@ -305,7 +306,7 @@ jobs:
             --expected-execution-file "$RUNNER_TEMP/claude-execution-output.json" --session-id "$SESSION_ID" \
             --expected-cwd "$WORKDIR" "${steps[@]}"
 
-      # One bounded retry (.github/scripts/README.md, "Retry"). The first result
+      # One bounded retry. The first result
       # step asks for it only when the output is malformed and carries no review
       # content (review_lib.retryable_output); output with a finding, a severity
       # or a location is never retried. The retry runs the same action with the

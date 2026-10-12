@@ -9,7 +9,7 @@
  * which a slow response arrives after a newer URL or direct load.
  *
  * Since T5 (#14) the specs/api-url.js assert spec asserts the loadMIDIUrl()
- * promise contract that these observations preceded (tasks/T6.md §13, §18);
+ * promise contract that these observations preceded;
  * this phase-A spec is kept unchanged as the baseline record.
  *
  * Every scenario first installs a small "previous" song directly, so the

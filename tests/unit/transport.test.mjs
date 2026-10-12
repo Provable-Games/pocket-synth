@@ -1,6 +1,6 @@
 /*
  * Transport: replaying a completed song (#10) and seeking (#21), under the
- * D-005 contract (tasks/T3.md):
+ * Transport contract:
  *   - locateMIDI(tick) restores the state loadMIDI installs (reset() defaults,
  *     scale and master tuning 0, 120 BPM), then applies the tempo and
  *     channel-state events before tick, without notes. Playback resumes at the

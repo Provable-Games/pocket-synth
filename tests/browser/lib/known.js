@@ -1,7 +1,7 @@
 /*
  * Baseline behavior the matrix recognizes but does not accept as correct.
- * Each entry names the issue and task expected to remove it; phase B turns
- * the corresponding observation into an assertion (docs/improvements/tasks/T6.md).
+ * Each entry retains the issue and historical task identifier for the baseline
+ * observation; current assertion specs enforce the corrected behavior.
  */
 "use strict";
 

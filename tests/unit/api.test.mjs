@@ -8,7 +8,7 @@
  * WebAudio call, no lazy context). A malformed raw message passed to send()
  * does nothing. Timbres are validated, copied and normalized; the caller's
  * objects are never modified. Expected values come from the MIDI
- * specification, tasks/T5.md, or upstream's own installed tables.
+ * specification, the public API contract, or upstream's own installed tables.
  *
  * loadMIDIUrl() runs against a mock XMLHttpRequest driven by each test.
  */
@@ -845,7 +845,7 @@ for (const variant of variants) {
       const d = s.synth.dispose();
       const [how, e] = await settle(p);
       expect([how, e.code, e.message, pending(s)]).toEqual(["rejected", "SYNTH_DISPOSED", "SYNTH_DISPOSED", 0]);
-      expect(s.reqs[0].aborted).toBe(false); // settled and discarded, not aborted (supervisor decision, tasks/T5.md section 5)
+      expect(s.reqs[0].aborted).toBe(false); // settled and discarded, not aborted (settled-load contract)
       await d;
       const from = s.trace.length;
       s.reqs[0].respond(200, SONG_B);

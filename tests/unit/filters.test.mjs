@@ -1,5 +1,5 @@
 /*
- * Fixed operator filters (#27) under D-007 as amended by D-028 (tasks/T12.md), on the mock
+ * Fixed operator filters (#27), on the mock
  * WebAudio of tests/harness.js, for both builds:
  *   - setTimbre's filter check (_checkFilter): what it accepts, what it rejects with which
  *     error, and that a rejection changes nothing (no slot, no caller object);
@@ -20,7 +20,7 @@ import { H, variants, noteHz } from "./helpers.mjs";
 
 const calls = (trace, from = 0) => trace.slice(from).map((line) => JSON.parse(line));
 const SQRT1_2_DB = 20 * Math.log10(Math.SQRT1_2); // -3.0103 dB: the default Q for low- and high-pass
-const CLAMP = 0.45; // x sample rate (tasks/T12.md, "Nyquist")
+const CLAMP = 0.45; // x sample rate: Nyquist clamp
 const FLOOR = 2 ** -126; // the smallest normal 32-bit float: the least accepted ff and fq (review F1)
 const BELOW = FLOOR * (1 - 2 ** -20); // a double just under it
 

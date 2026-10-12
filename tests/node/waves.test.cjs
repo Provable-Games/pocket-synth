@@ -44,7 +44,7 @@ function engineCall(w) {
   return ["setSampleWave", w.name, s.map((x) => x / 128)];
 }
 
-/* D-027's held table, written from the formula, with the guard frame (the first sample again; tasks/T11.md): {frames, base}. */
+/* D-027's held table, written from the formula, with the guard frame (the first sample again): {frames, base}. */
 function held(samples, sr) {
   const n = samples.length, k = Math.max(1, Math.round(sr / (440 * n)));
   const frames = new Float32Array(n * k + 1);
@@ -53,7 +53,7 @@ function held(samples, sr) {
   return { frames, base: sr / (n * k) };
 }
 
-/* Installs the fixture the way the consumer's page does (contracts.md, consumer setup contract). */
+/* Installs the fixture the way the consumer's page does (consumer setup contract). */
 function install(synth) {
   const e = SETUP.settings.engine;
   synth.setQuality(e.quality);

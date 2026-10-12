@@ -1,5 +1,5 @@
 /*
- * The OfflineAudioContext contract (#12, D-017, D-018; tasks/T4.md §3).
+ * The OfflineAudioContext contract (#12).
  * T4 phase-B checks.
  *
  * Asserted, for both builds:
