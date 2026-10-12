@@ -182,10 +182,9 @@ for (const variant of variants) {
       s.synth.setLoop(1);
       s.synth.loopEnd = -480;
       const from = s.notes.length;
-      const origin = s.synth.getAudioContext().currentTime + 0.1;
       s.synth.playMIDI();
       for (let i = 0; i < 50; ++i) s.env.step();
-      expect(s.synth.getPlayStatus()).toEqual(H.playStatus(0, 0, 0, null, origin));
+      expect(s.synth.getPlayStatus()).toEqual(H.playStatus(0, 0, 0));
       expect(s.notes.length - from).toBe(1);
     });
 
@@ -919,3 +918,4 @@ for (const variant of variants) {
     });
   });
 }
+
