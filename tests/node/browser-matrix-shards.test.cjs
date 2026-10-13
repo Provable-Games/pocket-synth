@@ -487,6 +487,9 @@ function bundleWithRevision(bundle, revision) {
   value.identitySha256 = stableSha256(Buffer.from(stableCanonical(value)));
   return value;
 }
+/* A revision that differs from the installed Playwright's pinned one, whatever that is. */
+const otherRevision = (engine) => String(Number(TEST_TOOLCHAIN.browsers[engine].revision) + 1);
+const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 function bundleWithId(bundle, bundleId) {
   const value = { ...bundle, bundleId };
   delete value.identitySha256;
@@ -1956,14 +1959,15 @@ test("merge rejects a same-version shard reporting a different Playwright browse
   const r = qualificationMerged((files) => {
     const [rel, report] = first(files, "webkit", "full-mix");
     const toolchain = report.matrixRun.browserToolchain;
+    const revision = otherRevision("webkit");
     toolchain.browsers.webkit = {
-      revision: "2370", bundleId: "webkit-2370", browserVersion: "26.6",
-      identitySha256: bundleWithRevision(testBrowserBundle("webkit"), "2370").identitySha256,
+      revision, bundleId: "webkit-" + revision, browserVersion: testBrowserVersion("webkit"),
+      identitySha256: bundleWithRevision(testBrowserBundle("webkit"), revision).identitySha256,
     };
     delete toolchain.identitySha256;
     toolchain.identitySha256 = stableSha256(Buffer.from(stableCanonical(toolchain)));
-    report.webkit.browserBundle = bundleWithRevision(report.webkit.browserBundle, "2370");
-    assert.equal(report.webkit.version, "26.6");
+    report.webkit.browserBundle = bundleWithRevision(report.webkit.browserBundle, revision);
+    assert.equal(report.webkit.version, testBrowserVersion("webkit"));
     files[rel] = report;
   });
   assert.equal(r.status, 1, r.out);
@@ -1973,7 +1977,8 @@ test("merge rejects a same-version shard reporting a different Playwright browse
 test("merge rejects a same-version measured reference pinned to a different browser bundle", () => {
   const reference = JSON.parse(TEST_REFERENCE_BYTES.toString("utf8"));
   const metadata = reference.engines.webkit["ws-mid-default"][44100].metadata;
-  const wrong = bundleWithRevision(metadata.browserBundle, "2370");
+  const wrong = bundleWithRevision(metadata.browserBundle, otherRevision("webkit"));
+  assert.equal(wrong.browserVersion, testBrowserVersion("webkit"));
   metadata.browserBundle = wrong;
   metadata.captureToolchain.browserBundle = wrong;
   const capturedToolchain = metadata.captureRun.browserToolchain;
@@ -1984,7 +1989,7 @@ test("merge rejects a same-version measured reference pinned to a different brow
   const r = qualificationMerged(null, Buffer.from(JSON.stringify(reference)));
   assert.equal(r.status, 1, r.out);
   assert.match(r.out, /producer reference status differs from the aggregate's exact identity selection/);
-  assert.match(r.out, /26\.6/);
+  assert.match(r.out, new RegExp(escapeRegExp(testBrowserVersion("webkit"))));
 });
 
 test("merge rejects same-version Chromium full-browser metadata for the headless-shell launch", () => {
@@ -1997,7 +2002,7 @@ test("merge rejects same-version Chromium full-browser metadata for the headless
     delete toolchain.identitySha256;
     toolchain.identitySha256 = stableSha256(Buffer.from(stableCanonical(toolchain)));
     report.chromium.browserBundle = wrong;
-    assert.equal(report.chromium.version, "153.0.8010.12");
+    assert.equal(report.chromium.version, testBrowserVersion("chromium"));
     files[rel] = report;
   });
   assert.equal(r.status, 1, r.out);
