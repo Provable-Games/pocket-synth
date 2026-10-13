@@ -100,7 +100,7 @@ These functions are available on a `WebAudioTinySynth` instance. Volume, quality
 
 #### setAudioContext(audioContext, destinationNode)
 
-> Replaces the current context with `audioContext`. It must have a `destination` and the factories the synth uses (`createGain`, `createDynamicsCompressor`, `createConvolver`, `createBuffer`, `createStereoPanner`, `createOscillator`, `createBufferSource`, `createBiquadFilter`, `createPeriodicWave`); otherwise, or for a `destinationNode` without `connect()` or of another context, it throws a `TypeError` and the current context stays installed and open.
+> Replaces the current context with `audioContext`. It must have a `destination` and the factories the synth uses (`createGain`, `createDynamicsCompressor`, `createBuffer`, `createOscillator`, `createBufferSource`, `createBiquadFilter`, `createPeriodicWave`, and `createConvolver` when `useReverb` is on; `createStereoPanner` is optional); otherwise, or for a `destinationNode` without `connect()` or of another context, it throws a `TypeError` and the current context stays installed and open.
 > Routes sounds to `destinationNode`, or to `audioContext.destination` if omitted.
 > Get the installed context with `getAudioContext()`.
 > The previous context's sounds stop, and the synth closes it if it created it. Call `stopMIDI()` before switching contexts during playback: the sequencer keeps the old context's clock, as upstream, so playback on a new context waits until that context's clock catches up.

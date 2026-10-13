@@ -677,11 +677,13 @@ function WebAudioTinySynthCore(target) {
       }
       return this._dp;
     },
-    _check:(c,d)=>{
-      /* Before anything changes: c has every factory the graph and the voices use, and a
-         destination, so a context that cannot be installed never replaces the current one. */
-      const f="Gain DynamicsCompressor Convolver Buffer StereoPanner Oscillator BufferSource"
-        +" BiquadFilter PeriodicWave";
+    _check:(c,d,r)=>{
+      /* Before anything changes: c has a destination and every factory the graph and the
+         voices call, so a context that cannot be installed never replaces the current one.
+         createConvolver is needed only with reverb r (default useReverb); createStereoPanner
+         is optional, as the graph connects channels directly without it. */
+      const f="Gain DynamicsCompressor Buffer Oscillator BufferSource BiquadFilter PeriodicWave"
+        +((r===undefined ? this.useReverb : r) ? " Convolver" : "");
       if(!c || !c.destination || f.split(" ").some(k=>typeof c["create"+k]!="function"))
         throw new TypeError("context");
       if(d!=undefined && (typeof d.connect!="function" || d.context && d.context!=c))
@@ -1798,8 +1800,9 @@ class WebAudioTinySynth {
     this._autoResume=a!==false;
     if(l!=undefined && typeof l!="boolean" || l && c!=undefined)
       throw new TypeError("lazy");
+    const {useReverb:r,quality:q,voices:v}=opt||{};
     if(c!=undefined || d!=undefined) // a destination without a context fails as "context"
-      this._check(c,d);
+      this._check(c,d,r!=undefined ? r : this.useReverb);
     /* The buffer seed (#7, D-004), also checked first: an integer from 0 to 2^32-1, default
        0. The seed and the buffer generation version are read-only properties. */
     let {seed:s}=opt||{};
@@ -1811,7 +1814,6 @@ class WebAudioTinySynth {
       throw new RangeError("seed must be an integer from 0 to 4294967295");
     Object.defineProperties(this,{seed:{value:s>>>0,enumerable:true},bufferVersion:{value:1,enumerable:true}});
     this._lazy=l;
-    const {useReverb:r,quality:q,voices:v}=opt||{};
     if(r!=undefined)
       this.useReverb=r;
     this.setQuality(q); // once (#18): undefined or null installs the default quality, 1

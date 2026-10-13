@@ -705,7 +705,7 @@ describe.each(variants)("$name: setAudioContext() replacement (#11)", (variant) 
     expect(s.synth.getAudioContext()).toBe(ctx);
   });
 
-  const FACTORIES = ["createGain", "createDynamicsCompressor", "createConvolver", "createBuffer", "createStereoPanner",
+  const FACTORIES = ["createGain", "createDynamicsCompressor", "createConvolver", "createBuffer",
     "createOscillator", "createBufferSource", "createBiquadFilter", "createPeriodicWave"];
 
   test.each(FACTORIES)("a context without %s throws a TypeError before the synth's own context is closed", (k) => {
@@ -717,6 +717,18 @@ describe.each(variants)("$name: setAudioContext() replacement (#11)", (variant) 
     s.synth.noteOn(0, 60, 100);
     expect(s.notes).toHaveLength(1); // the synth keeps working on its context
     expect(thrown(() => new s.Synth({ context: Object.assign(new s.Base(), { [k]: undefined }) })).name).toBe("TypeError");
+  });
+
+  test("createStereoPanner is optional, and createConvolver is needed only with reverb", () => {
+    const s = make(variant);
+    const noPan = Object.assign(new s.Base(), { createStereoPanner: undefined });
+    s.synth.setAudioContext(noPan);
+    expect(s.synth.getAudioContext()).toBe(noPan);
+    const noConv = () => Object.assign(new s.Base(), { createConvolver: undefined });
+    expect(new s.Synth({ context: noConv(), useReverb: 0 }).getAudioContext()).toBeTruthy();
+    const dry = new s.Synth({ useReverb: 0 }), ctx = noConv();
+    dry.setAudioContext(ctx);
+    expect(dry.getAudioContext()).toBe(ctx);
   });
 
   test("an OfflineAudioContext stops MIDI playback", () => {
