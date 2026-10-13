@@ -3,7 +3,9 @@
 
 /* Reanalyze retained native first-attempt Float32 WAV evidence under the
  * separately versioned v6 full-mix feature method. This script never launches
- * a browser, edits a capture, or promotes a diagnostic repeat. */
+ * a browser, edits a capture, or promotes a diagnostic repeat. Its input is one
+ * local results directory holding every engine, or the three per-engine CI
+ * qualification artifacts of one run (one --input each). */
 const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
@@ -12,19 +14,53 @@ const { MATRIX } = require("../tests/browser/matrix");
 const matrix = require("./browser-matrix");
 const browserToolchain = require("./browser-toolchain");
 
+const ENGINES = ["chromium", "firefox", "webkit"];
+
 function hash(bytes) {
   return crypto.createHash("sha256").update(bytes).digest("hex");
 }
 
 function args(argv) {
-  const out = {};
+  const out = { inputs: [] };
   for (const value of argv) {
     const m = /^--(input|out|reference-out)=(.+)$/.exec(value);
-    if (!m) throw new Error("usage: node scripts/reanalyze-fullmix-v6.js --input=<v5-results-dir> --out=<json-path> [--reference-out=<json-path>]");
-    out[m[1]] = path.resolve(m[2]);
+    if (!m) throw new Error("usage: node scripts/reanalyze-fullmix-v6.js --input=<results-dir> [--input=<results-dir> ...] --out=<json-path> [--reference-out=<json-path>]");
+    if (m[1] === "input") out.inputs.push(path.resolve(m[2]));
+    else if (out[m[1]]) throw new Error("--" + m[1] + " may be given only once");
+    else out[m[1]] = path.resolve(m[2]);
   }
-  if (!out.input || !out.out) throw new Error("both --input and --out are required");
+  if (!out.inputs.length || !out.out) throw new Error("both --input and --out are required");
   return out;
+}
+
+/* Several inputs must each hold one engine's report, together cover every
+ * engine once, and share one run: every matrixRun field except engine agrees
+ * (run ID and attempt, commit, configuration, reference, builds, toolchain). */
+function readInputs(dirs) {
+  const captures = {};
+  const inputs = dirs.map((dir) => {
+    const bytes = fs.readFileSync(path.join(dir, "results.json"));
+    const report = JSON.parse(bytes.toString("utf8"));
+    const run = report.matrixRun;
+    if (!run || !run.selection || !Array.isArray(run.selection.specs) || !run.selection.specs.includes("full-mix"))
+      throw new Error(dir + ": input results are not a retained full-mix matrix run");
+    const engines = ENGINES.filter((engine) => Object.hasOwn(report, engine));
+    if (dirs.length > 1 && (engines.length !== 1 || run.engine !== engines[0]))
+      throw new Error(dir + ": each of several inputs must be one engine's report with a matching matrixRun.engine");
+    const reportSha256 = hash(bytes);
+    for (const engine of engines) {
+      if (captures[engine]) throw new Error(dir + ": engine " + engine + " is supplied by more than one input");
+      captures[engine] = { reportSha256, matrixRun: run };
+    }
+    return { dir, report, engines, reportSha256 };
+  });
+  const missing = ENGINES.filter((engine) => !captures[engine]);
+  if (missing.length) throw new Error("inputs are missing engine " + missing.join(", "));
+  const runIdentity = (run) => canonical({ ...run, engine: null });
+  if (inputs.some((input) => runIdentity(input.report.matrixRun) !== runIdentity(inputs[0].report.matrixRun)))
+    throw new Error("inputs come from different runs, attempts, commits, configurations, references, builds or toolchains");
+  inputs.sort((a, b) => ENGINES.indexOf(a.engines[0]) - ENGINES.indexOf(b.engines[0]));
+  return { inputs, captures };
 }
 
 const REFERENCE_TOLERANCES = {
@@ -76,25 +112,36 @@ function compactMetrics(metrics) {
   };
 }
 
-function makeReference(rows, reportSha256, matrixRun, historicalToolchain, env = process.env, root = path.resolve(__dirname, "..")) {
+/* captures maps each engine to the report holding its rows: { reportSha256,
+ * matrixRun }. A local all-engine report serves every engine. */
+function makeReference(rows, captures, historicalToolchain, env = process.env, root = path.resolve(__dirname, "..")) {
   const engines = {};
   const expectedCases = fullMix.referenceExpectedCases();
   const expectedCaseSet = new Set(expectedCases);
   const seenCases = new Set();
+  const captureOf = (row) => captures[row.engine] || {};
   const hasCurrentCaptureIdentity = (row) => {
     const fixture = fullMix.FIXTURE_BY_ID[row.fixtureId];
     return !!fixture && row.input?.captureMethodSha256 === fixture.methodSha256 &&
       row.input?.captureToleranceSha256 === fixture.toleranceSha256;
   };
   const hasPinnedSeed = (row) => row.seed === MATRIX.seed && row.matrixSeed === MATRIX.seed &&
-    row.captureRun?.selection?.seed === MATRIX.seed && matrixRun?.selection?.seed === MATRIX.seed &&
+    row.captureRun?.selection?.seed === MATRIX.seed && captureOf(row).matrixRun?.selection?.seed === MATRIX.seed &&
     row.input?.settingsSha256 === fullMix.FIXTURE_BY_ID[row.fixtureId]?.settingsSha256;
   const canExport = (row) => row.referenceExportEligible === true && hasPinnedSeed(row) && hasCurrentCaptureIdentity(row);
+  const firstAttemptClipping = (row) => ["source", "min"].filter((build) => row.builds[build].first.overFullScaleSamples > 0)
+    .map((build) => {
+      const first = row.builds[build].first;
+      return build + " has " + first.overFullScaleSamples + " over-full-scale channel samples in " +
+        first.overFullScaleFrames.length + " frame(s) from " + (first.overFullScaleFrames[0].frame / first.sampleRate).toFixed(6) +
+        " s, peak " + first.peak;
+    });
   for (const row of rows) {
     const caseId = row.engine + "/" + row.fixtureId + "/" + row.sampleRate;
     if (!expectedCaseSet.has(caseId) || seenCases.has(caseId)) continue;
     seenCases.add(caseId);
     if (!canExport(row)) continue;
+    const { reportSha256, matrixRun } = captureOf(row);
     const recordedToolchain = matrixRun.browserToolchain || null;
     const captureToolchain = recordedToolchain || historicalToolchain;
     const capturedBundle = matrix.browserBundle(captureToolchain, row.engine);
@@ -154,8 +201,8 @@ function makeReference(rows, reportSha256, matrixRun, historicalToolchain, env =
   const incompleteCases = rows.filter((row) => !canExport(row)).map((row) => ({
     id: row.engine + "/" + row.fixtureId + "/" + row.sampleRate,
     firstAttemptStatus: row.firstAttemptStatus,
-    reason: row.fixtureId === "ws-mid-default" && row.engine === "webkit" && row.sampleRate === 48000
-      ? "first attempt failed: source and min raw WAVs each contain two over-full-scale channel samples in one frame; a diagnostic repeat retains the same frame and cannot promote attempt 1"
+    reason: firstAttemptClipping(row).length
+      ? "first attempt failed: " + firstAttemptClipping(row).join("; ") + "; a diagnostic repeat cannot promote attempt 1"
       : row.referenceExportEligible && !hasPinnedSeed(row)
         ? "retained matrix seed or fixture settings identity differs from the independently pinned matrix seed"
         : row.referenceExportEligible && !hasCurrentCaptureIdentity(row)
@@ -289,13 +336,13 @@ function producerSummaryConsistent(obs, sourceMin) {
   });
 }
 
-function pairRows(report, reportDir, { env = process.env, root = path.resolve(__dirname, "..") } = {}) {
+function pairRows(report, reportDir, { env = process.env, root = path.resolve(__dirname, ".."), engines = ENGINES } = {}) {
   if (typeof reportDir !== "string" || !reportDir) throw new Error("pairRows requires the retained report directory");
   const resolvedToolchain = matrix.resolveBrowserToolchain(env);
   const recordedToolchain = report.matrixRun && report.matrixRun.browserToolchain;
   const toolchainMatches = !!recordedToolchain && sameJson(recordedToolchain, resolvedToolchain);
   const rows = [];
-  for (const engine of ["chromium", "firefox", "webkit"]) {
+  for (const engine of engines) {
     const engineReport = report[engine];
     if (!engineReport || !Array.isArray(engineReport.cases)) throw new Error("matrix report missing engine " + engine);
     for (const c of engineReport.cases) {
@@ -543,12 +590,9 @@ function pairRows(report, reportDir, { env = process.env, root = path.resolve(__
 
 function main(argv) {
   const argsv = args(argv);
-  const reportFile = path.join(argsv.input, "results.json");
-  const reportBytes = fs.readFileSync(reportFile);
-  const report = JSON.parse(reportBytes.toString("utf8"));
-  if (!report.matrixRun || !report.matrixRun.selection || !report.matrixRun.selection.specs.includes("full-mix"))
-    throw new Error("input results are not a retained full-mix matrix run");
-  const rows = pairRows(report, argsv.input);
+  const { inputs, captures } = readInputs(argsv.inputs);
+  const rows = inputs.flatMap((input) => pairRows(input.report, input.dir, { engines: input.engines }));
+  const recordedToolchain = inputs[0].report.matrixRun.browserToolchain;
   const historicalToolchain = matrix.resolveBrowserToolchain();
   const expected = fullMix.referenceExpectedCases();
   const actual = rows.map((row) => row.engine + "/" + row.fixtureId + "/" + row.sampleRate).sort();
@@ -564,9 +608,11 @@ function main(argv) {
     analysisVersion: fullMix.ANALYSIS_VERSION, methodSha256: fullMix.FIXTURES[0].methodSha256,
     toleranceSha256: fullMix.FIXTURES[0].toleranceSha256, referenceToleranceSha256,
     referenceToleranceDerivation: "eligible first-attempt versus retained diagnostic-repeat features: max window drift 0.0003422 dB, max note-window 0.00000773 dB, max transient envelope 0.00000270 dB, max downbeat projection 0.000000612 dB, max peak delta 1.78814e-7; tighter measured features retain modest bounded floors; 35-cent isolated pitch threshold is the independently justified normative policy",
-    capture: { reportPath: "results.json", reportSha256: hash(reportBytes), matrixRun: report.matrixRun,
-      toolchain: report.matrixRun.browserToolchain || historicalToolchain,
-      toolchainSource: report.matrixRun.browserToolchain ? "recorded-in-capture-matrixRun-browserToolchain" : "reconstructed-from-retained-v5-pinned-runner-toolchain" },
+    capture: {
+      reports: inputs.map(({ dir, engines, reportSha256, report }) =>
+        ({ input: dir, reportPath: "results.json", engines, reportSha256, matrixRun: report.matrixRun })),
+      toolchain: recordedToolchain || historicalToolchain,
+      toolchainSource: recordedToolchain ? "recorded-in-capture-matrixRun-browserToolchain" : "reconstructed-from-retained-v5-pinned-runner-toolchain" },
     expectedCases: expected, rows, coverage: {
       expected: expected.length, eligible: eligible.length, status: eligible.length === expected.length ? "complete" : "incomplete",
       eligibleCases: eligible, incompleteCases: ineligible,
@@ -575,7 +621,7 @@ function main(argv) {
   fs.mkdirSync(path.dirname(argsv.out), { recursive: true });
   fs.writeFileSync(argsv.out, JSON.stringify(result, null, 2) + "\n");
   if (argsv["reference-out"]) {
-    const reference = makeReference(rows, result.capture.reportSha256, report.matrixRun, historicalToolchain);
+    const reference = makeReference(rows, captures, historicalToolchain);
     fs.mkdirSync(path.dirname(argsv["reference-out"]), { recursive: true });
     fs.writeFileSync(argsv["reference-out"], JSON.stringify(reference, null, 2) + "\n");
     result.reference = { path: argsv["reference-out"], status: reference.status,
@@ -587,4 +633,4 @@ function main(argv) {
 
 if (require.main === module) main(process.argv.slice(2));
 
-module.exports = { pairRows, makeReference, main, REFERENCE_TOLERANCES };
+module.exports = { readInputs, pairRows, makeReference, main, REFERENCE_TOLERANCES };

@@ -104,6 +104,11 @@ function sha256(value) {
   return crypto.createHash("sha256").update(value).digest("hex");
 }
 
+// One local all-engine report supplies every engine's capture provenance.
+function everyEngine(reportSha256, matrixRun) {
+  return Object.fromEntries(["chromium", "firefox", "webkit"].map((engine) => [engine, { reportSha256, matrixRun }]));
+}
+
 function makeReanalysisPcm() {
   const fixture = fullMix.FIXTURE_BY_ID["tinychip-ws-mid"], sampleRate = 44100;
   const frames = Math.ceil(fixture.renderDurationSec * sampleRate);
@@ -603,8 +608,8 @@ test("offline reference export re-derives first-attempt eligibility and validate
     assert.equal(rows[0].builds.source.diagnosticRepeat.artifactPath,
       "chromium/full-mix/tinychip-ws-mid-q1-44100-source-diagnostic-repeat.wav");
     assert.equal(rows[0].builds.source.firstVsRepeat.ok, true);
-    const reference = reanalyzer.makeReference(rows, sha256(Buffer.from("retained-test-report")),
-      baseline.matrixRun, linuxToolchain, linuxFixture.env, linuxFixture.root);
+    const reference = reanalyzer.makeReference(rows, everyEngine(sha256(Buffer.from("retained-test-report")), baseline.matrixRun),
+      linuxToolchain, linuxFixture.env, linuxFixture.root);
     assert.equal(reference.status, "incomplete");
     assert.equal(reference.coverage.measuredCases.length, 1);
     assert.ok(reference.engines.chromium[baseline.fixture.id][baseline.sampleRate]);
@@ -707,8 +712,8 @@ test("offline reference export re-derives first-attempt eligibility and validate
       const wrongSeedRows = reanalyzer.pairRows(report, temp, options);
       assert.equal(wrongSeedRows[0].referenceExportEligible, false, label);
       assert.equal(wrongSeedRows[0].captureCheckEvidence.source.pinnedMatrixSeed, false, label);
-      const rejectedReference = reanalyzer.makeReference(wrongSeedRows, sha256(Buffer.from(label)),
-        report.matrixRun, linuxToolchain, linuxFixture.env, linuxFixture.root);
+      const rejectedReference = reanalyzer.makeReference(wrongSeedRows, everyEngine(sha256(Buffer.from(label)), report.matrixRun),
+        linuxToolchain, linuxFixture.env, linuxFixture.root);
       assert.equal(rejectedReference.coverage.measuredCases.length, 0, label);
     }
     for (const [label, rowSeed, settingsSha256, matrixSeed, originatingMatrixSeed, originatingRunSeed] of [
@@ -731,8 +736,8 @@ test("offline reference export re-derives first-attempt eligibility and validate
       forgedRow.input.settingsSha256 = settingsSha256;
       const wrongRun = structuredClone(baseline.matrixRun);
       wrongRun.selection.seed = matrixSeed;
-      const rejectedReference = reanalyzer.makeReference([forgedRow], sha256(Buffer.from(label)),
-        wrongRun, linuxToolchain, linuxFixture.env, linuxFixture.root);
+      const rejectedReference = reanalyzer.makeReference([forgedRow], everyEngine(sha256(Buffer.from(label)), wrongRun),
+        linuxToolchain, linuxFixture.env, linuxFixture.root);
       assert.equal(rejectedReference.coverage.measuredCases.length, 0, label);
     }
 
@@ -746,8 +751,8 @@ test("offline reference export re-derives first-attempt eligibility and validate
       forgedRow.referenceExportEligible = true;
       if (value === undefined) delete forgedRow.input[key];
       else forgedRow.input[key] = value;
-      const rejectedReference = reanalyzer.makeReference([forgedRow], sha256(Buffer.from(label)),
-        baseline.matrixRun, linuxToolchain, linuxFixture.env, linuxFixture.root);
+      const rejectedReference = reanalyzer.makeReference([forgedRow], everyEngine(sha256(Buffer.from(label)), baseline.matrixRun),
+        linuxToolchain, linuxFixture.env, linuxFixture.root);
       assert.equal(rejectedReference.coverage.measuredCases.length, 0, label);
       assert.ok(rejectedReference.coverage.incompleteCases.some((row) =>
         row.reason.includes("original capture method/tolerance identity differs from the current fixture contract")), label);
@@ -787,8 +792,8 @@ test("offline reference export re-derives first-attempt eligibility and validate
       assert.equal(comparisonRow.builds.source.first.sha256, rows[0].builds.source.first.sha256);
       assert.equal(comparisonRow.builds.min.first.sha256, rows[0].builds.min.first.sha256);
       assert.notDeepEqual(reported, original, label === "missing" ? undefined : build + " comparison mutation");
-      const rejectedReference = reanalyzer.makeReference(comparisonRows, sha256(Buffer.from(build + label)),
-        baseline.matrixRun, linuxToolchain, linuxFixture.env, linuxFixture.root);
+      const rejectedReference = reanalyzer.makeReference(comparisonRows, everyEngine(sha256(Buffer.from(build + label)), baseline.matrixRun),
+        linuxToolchain, linuxFixture.env, linuxFixture.root);
       assert.equal(rejectedReference.coverage.measuredCases.length, 0, build + " first comparison " + label);
     }
 
@@ -809,8 +814,8 @@ test("offline reference export re-derives first-attempt eligibility and validate
       assert.match(evidence.recomputedSha256, /^[a-f0-9]{64}$/);
       if (label === "missing") assert.equal(evidence.reportedSha256, null);
       else assert.match(evidence.reportedSha256, /^[a-f0-9]{64}$/);
-      const rejectedReference = reanalyzer.makeReference(metricRows, sha256(Buffer.from(build + label)),
-        baseline.matrixRun, linuxToolchain, linuxFixture.env, linuxFixture.root);
+      const rejectedReference = reanalyzer.makeReference(metricRows, everyEngine(sha256(Buffer.from(build + label)), baseline.matrixRun),
+        linuxToolchain, linuxFixture.env, linuxFixture.root);
       assert.equal(rejectedReference.coverage.measuredCases.length, 0, build + " first metrics " + label);
     }
 
@@ -865,8 +870,8 @@ test("offline reference export re-derives first-attempt eligibility and validate
       });
       assert.equal(Object.hasOwn(incompleteRow.builds[build].diagnosticRepeat, "sha256"), false);
     }
-    const incompleteReference = reanalyzer.makeReference(incompleteRows, sha256(Buffer.from("missing-repeat")),
-      baseline.matrixRun, linuxToolchain, linuxFixture.env, linuxFixture.root);
+    const incompleteReference = reanalyzer.makeReference(incompleteRows, everyEngine(sha256(Buffer.from("missing-repeat")), baseline.matrixRun),
+      linuxToolchain, linuxFixture.env, linuxFixture.root);
     assert.equal(incompleteReference.coverage.measuredCases.length, 1,
       "reference export remains based on the independently validated first WAVs");
 
@@ -989,7 +994,7 @@ test("offline reference export re-derives first-attempt eligibility and validate
       const rejected = reanalyzer.pairRows(report, temp, options)[0];
       assert.equal(rejected.captureCheckEvidence.source[check], false, label);
       assert.equal(rejected.referenceExportEligible, false, label);
-      assert.equal(reanalyzer.makeReference([rejected], sha256(Buffer.from(label)), baseline.matrixRun,
+      assert.equal(reanalyzer.makeReference([rejected], everyEngine(sha256(Buffer.from(label)), baseline.matrixRun),
         linuxToolchain, linuxFixture.env, linuxFixture.root).coverage.measuredCases.length, 0, label);
     }
 
@@ -1041,7 +1046,7 @@ test("offline reference export re-derives first-attempt eligibility and validate
       "historical metrics remain inspectable without comparing their old analysis as current evidence");
     assert.match(priorRow.builds.source.diagnosticRepeat.reportedComparisonSha256, /^[a-f0-9]{64}$/);
     assert.match(priorRow.builds.source.diagnosticRepeat.recomputedComparisonSha256, /^[a-f0-9]{64}$/);
-    assert.equal(reanalyzer.makeReference([priorRow], sha256(Buffer.from("prior-method")), baseline.matrixRun,
+    assert.equal(reanalyzer.makeReference([priorRow], everyEngine(sha256(Buffer.from("prior-method")), baseline.matrixRun),
       linuxToolchain, linuxFixture.env, linuxFixture.root).coverage.measuredCases.length, 0);
 
     const macFixture = createBrowserToolchainFixture("/cache/webkit_mac14_arm64_special-2251/pw_run.sh");
@@ -1053,18 +1058,140 @@ test("offline reference export re-derives first-attempt eligibility and validate
       const macRows = reanalyzer.pairRows(override.report, temp, macOptions);
       assert.equal(macRows.length, 1);
       assert.equal(macRows[0].referenceExportEligible, true);
-      const macReference = reanalyzer.makeReference(macRows, sha256(Buffer.from("override-report")),
-        override.matrixRun, macToolchain, macFixture.env, macFixture.root);
+      const macReference = reanalyzer.makeReference(macRows, everyEngine(sha256(Buffer.from("override-report")), override.matrixRun),
+        macToolchain, macFixture.env, macFixture.root);
       const macMetadata = macReference.engines.webkit[override.fixture.id][override.sampleRate].metadata;
       assert.equal(macMetadata.browserVersion, "observed-webkit-override-version");
       assert.equal(macMetadata.browserBundle.browserVersion, null);
 
       const noObservedVersion = { ...macRows[0], browserVersion: "" };
-      assert.throws(() => reanalyzer.makeReference([noObservedVersion], sha256(Buffer.from("blank-version")),
-        override.matrixRun, macToolchain, macFixture.env, macFixture.root), /version differs/);
+      assert.throws(() => reanalyzer.makeReference([noObservedVersion], everyEngine(sha256(Buffer.from("blank-version")), override.matrixRun),
+        macToolchain, macFixture.env, macFixture.root), /version differs/);
     } finally {
       macFixture.close();
     }
+  } finally {
+    linuxFixture.close();
+    fs.rmSync(temp, { recursive: true, force: true });
+  }
+});
+
+function writeQualificationArtifacts(root, { mutate = () => {}, engines = ["chromium", "firefox", "webkit"] } = {}) {
+  const run = {
+    schemaVersion: 3, repository: "Provable-Games/pocket-synth",
+    workflowRef: "Provable-Games/pocket-synth/.github/workflows/browser-matrix.yml@refs/heads/ci",
+    eventName: "workflow_dispatch", runId: "1234", runAttempt: "1", testedSha: "a".repeat(40),
+    matrixConfigSha256: "b".repeat(64), fullMixReference: { schemaVersion: 1, status: "present", sha256: "c".repeat(64) },
+    shard: { index: 1, total: 1 },
+    selection: { mode: "full-mix-qualification", kind: "assert", seed: MATRIX.seed, specs: ["render", "full-mix"] },
+    buildSha256: { source: "d".repeat(64), min: "e".repeat(64) }, browserToolchain: { identitySha256: "f".repeat(64) },
+  };
+  return engines.map((engine) => {
+    const dir = path.join(root, "full-mix-qualification-" + engine, "browser-matrix");
+    const report = { matrixRun: { ...structuredClone(run), engine }, [engine]: { engine, cases: [] }, crossEngine: [] };
+    mutate(report, engine);
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, "results.json"), JSON.stringify(report));
+    return dir;
+  });
+}
+
+test("offline reference export reads one run's per-engine qualification artifacts and rejects mixed provenance", () => {
+  const temp = fs.mkdtempSync(path.join(os.tmpdir(), "tinysynth-v6-per-engine-inputs-"));
+  try {
+    const dirs = writeQualificationArtifacts(path.join(temp, "ok"));
+    const { inputs, captures } = reanalyzer.readInputs([dirs[2], dirs[0], dirs[1]]);
+    assert.deepEqual(inputs.map((input) => input.engines), [["chromium"], ["firefox"], ["webkit"]],
+      "inputs are ordered by engine whatever order they were given in");
+    for (const [i, engine] of ["chromium", "firefox", "webkit"].entries()) {
+      assert.equal(captures[engine].matrixRun.engine, engine, "each engine binds its own report's run record");
+      assert.equal(captures[engine].reportSha256, sha256(fs.readFileSync(path.join(dirs[i], "results.json"))));
+    }
+
+    const local = path.join(temp, "local");
+    fs.mkdirSync(local);
+    const localReport = { matrixRun: { engine: null, selection: { seed: MATRIX.seed, specs: ["full-mix"] } },
+      chromium: { cases: [] }, firefox: { cases: [] }, webkit: { cases: [] } };
+    fs.writeFileSync(path.join(local, "results.json"), JSON.stringify(localReport));
+    const single = reanalyzer.readInputs([local]);
+    assert.deepEqual(single.inputs[0].engines, ["chromium", "firefox", "webkit"], "a local all-engine report remains one input");
+    assert.equal(new Set(Object.values(single.captures).map((capture) => capture.reportSha256)).size, 1);
+
+    let n = 0;
+    const rejected = (label, options, expected, pick = (all) => all) => {
+      const all = writeQualificationArtifacts(path.join(temp, "case-" + ++n), options);
+      assert.throws(() => reanalyzer.readInputs(pick(all)), expected, label);
+    };
+    for (const [label, mutate] of [
+      ["run ID", (run) => { run.runId = "1235"; }],
+      ["run attempt", (run) => { run.runAttempt = "2"; }],
+      ["commit", (run) => { run.testedSha = "0".repeat(40); }],
+      ["configuration", (run) => { run.matrixConfigSha256 = "0".repeat(64); }],
+      ["reference", (run) => { run.fullMixReference.sha256 = "0".repeat(64); }],
+      ["builds", (run) => { run.buildSha256.min = "0".repeat(64); }],
+      ["toolchain", (run) => { run.browserToolchain.identitySha256 = "0".repeat(64); }],
+      ["selection", (run) => { run.selection.specs = ["full-mix"]; }],
+    ]) rejected(label, { mutate: (report, engine) => { if (engine === "webkit") mutate(report.matrixRun); } },
+      /different runs, attempts, commits, configurations, references, builds or toolchains/);
+    rejected("mismatched engine record", { mutate: (report, engine) => { if (engine === "webkit") report.matrixRun.engine = "chromium"; } },
+      /one engine's report with a matching matrixRun.engine/);
+    rejected("several engines in one of several inputs", { mutate: (report, engine) => {
+      if (engine === "webkit") report.chromium = { engine: "chromium", cases: [] };
+    } }, /one engine's report with a matching matrixRun.engine/);
+    rejected("duplicate engine", {}, /engine chromium is supplied by more than one input/, (all) => {
+      const copy = path.join(path.dirname(all[1]), "..", "copy");
+      fs.mkdirSync(copy);
+      fs.copyFileSync(path.join(all[0], "results.json"), path.join(copy, "results.json"));
+      return [all[0], copy, all[2]];
+    });
+    rejected("missing engine", { engines: ["chromium", "firefox"] }, /inputs are missing engine webkit/);
+    rejected("not a full-mix run", { mutate: (report) => { report.matrixRun.selection.specs = ["render"]; } },
+      /not a retained full-mix matrix run/);
+  } finally {
+    fs.rmSync(temp, { recursive: true, force: true });
+  }
+});
+
+test("per-engine captures bind each exported row to its own report; a clipped first attempt states its measured samples", () => {
+  const temp = fs.mkdtempSync(path.join(os.tmpdir(), "tinysynth-v6-per-engine-export-"));
+  const linuxFixture = createBrowserToolchainFixture("/cache/webkit-2359/pw_run.sh");
+  const linuxToolchain = linuxFixture.resolve();
+  try {
+    const options = { env: linuxFixture.env, root: linuxFixture.root };
+    const captures = {}, rows = [];
+    for (const engine of ["chromium", "webkit"]) {
+      const dir = path.join(temp, engine);
+      const { report } = makeReanalysisReport(dir, linuxToolchain, engine);
+      const perEngine = { matrixRun: { ...report.matrixRun, engine }, [engine]: report[engine] };
+      assert.throws(() => reanalyzer.pairRows(perEngine, dir, options), /matrix report missing engine/,
+        "without an explicit engine list every engine is still required");
+      rows.push(...reanalyzer.pairRows(perEngine, dir, { ...options, engines: [engine] }));
+      captures[engine] = { reportSha256: sha256(Buffer.from(engine + " report")), matrixRun: perEngine.matrixRun };
+    }
+    assert.deepEqual(rows.map((row) => row.engine + ":" + row.referenceExportEligible), ["chromium:true", "webkit:true"]);
+    const reference = reanalyzer.makeReference(rows, captures, linuxToolchain, linuxFixture.env, linuxFixture.root);
+    assert.equal(reference.coverage.measuredCases.length, 2);
+    for (const engine of ["chromium", "webkit"]) {
+      const metadata = reference.engines[engine]["tinychip-ws-mid"][44100].metadata;
+      assert.equal(metadata.captureRun.engine, engine);
+      assert.equal(metadata.captureReportSha256, captures[engine].reportSha256);
+    }
+    const withoutWebkit = reanalyzer.makeReference(rows, { chromium: captures.chromium }, linuxToolchain,
+      linuxFixture.env, linuxFixture.root);
+    assert.deepEqual(withoutWebkit.coverage.measuredCases, ["chromium/tinychip-ws-mid/44100"],
+      "a row without its engine's report provenance is not exported");
+
+    const clipped = structuredClone(rows[0]);
+    clipped.referenceExportEligible = false;
+    clipped.firstAttemptStatus = "fail";
+    Object.assign(clipped.builds.source.first, { overFullScaleSamples: 2, peak: 1.25,
+      overFullScaleFrames: [{ frame: 44100, channels: {} }] });
+    const clippedReference = reanalyzer.makeReference([clipped], captures, linuxToolchain, linuxFixture.env, linuxFixture.root);
+    assert.deepEqual(clippedReference.coverage.incompleteCases.find((row) => row.id === "chromium/tinychip-ws-mid/44100"), {
+      id: "chromium/tinychip-ws-mid/44100", firstAttemptStatus: "fail",
+      reason: "first attempt failed: source has 2 over-full-scale channel samples in 1 frame(s) from 1.000000 s, peak 1.25; " +
+        "a diagnostic repeat cannot promote attempt 1",
+    });
   } finally {
     linuxFixture.close();
     fs.rmSync(temp, { recursive: true, force: true });
