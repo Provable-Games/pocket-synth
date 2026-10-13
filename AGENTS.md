@@ -13,7 +13,7 @@ Verify review findings against intended behavior and actual consequences. Prefer
 
 ## Commands and generated files
 
-Use `.nvmrc` and `npm ci`. Work in your assigned checkout; stop only your own processes. Keep local evidence in an explicit ignored path or outside the repo.
+Use `.nvmrc` and `npm ci`. Work in your assigned checkout; stop only your own processes. Keep temporary local evidence outside the repo and delete it once the work merges. GitHub issues, PRs and comments must stand on their own: put findings, versions and CI run links in the text, never local paths.
 
 ```sh
 npm run lint
@@ -29,13 +29,13 @@ Tests build fresh minified output under ignored `.build/`; `node scripts/test-bu
 
 Feature PRs never commit `webaudio-tinysynth.min.js` or its map, and nobody edits them by hand. Integration CI generates them after merges; `main` uses [manual release PRs](README.md#distribution-verification-and-releases). Check locally with `node scripts/check-dist.js --unchanged-from=origin/<base-branch>`; use a fresh ignored build for validation.
 
-Ordinary browser CI has narrowly approved exceptions in `tests/browser/lib/known-failures.js`, tracked in [#96](https://github.com/Provable-Games/pocket-synth/issues/96) and [#97](https://github.com/Provable-Games/pocket-synth/issues/97). Local defaults and full-mix qualification stay strict. Preserve original assertions, tolerances and failed first attempts; clean diagnostics do not clear them. Original capture evidence lives outside the repo: do not delete it, relax tests or widen exceptions as routine cleanup.
+Ordinary browser CI has narrowly approved exceptions in `tests/browser/lib/known-failures.js`, tracked in [#96](https://github.com/Provable-Games/pocket-synth/issues/96) and [#97](https://github.com/Provable-Games/pocket-synth/issues/97). Local defaults and full-mix qualification stay strict. Preserve original assertions, tolerances and failed first attempts; clean diagnostics do not clear them. Do not relax tests or widen exceptions as routine cleanup.
 
 ## Documentation and vendored assets
 
 Maintain three guides: README for human usage/API/testing/releases, NOTICE for upstream attribution and concise modifications, and AGENTS for agent commands/constraints/CI setup. CLAUDE only points here. Update the affected guide with code changes; do not create task journals, status ledgers or standalone narrative reports.
 
-Full-mix method, tolerance and setup fingerprints hash raw file bytes, including comments and fixture metadata. Documentation-only cleanup must preserve these inputs. `tests/browser/tolerances.js`, `tests/browser/lib/first-attempt.js` and `tests/fixtures/consumer/waves-setup.json` intentionally retain historical annotations to preserve compatibility with retained captures.
+Full-mix method, tolerance and setup fingerprints hash raw file bytes, including comments and fixture metadata, so any edit to those files invalidates the committed full-mix reference until it is recaptured.
 
 Treat `bower_components/webaudio-controls/webaudio-controls.js` as an unmodified upstream file. To update it, replace it from a specific upstream commit and record that commit and SHA-256 in NOTICE; preserve its license and copyright header. Do not include demo controls in the synth package.
 
