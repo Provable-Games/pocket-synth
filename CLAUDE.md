@@ -1,1 +1,1 @@
-See [AGENTS.md](AGENTS.md) for repository guidance.
+@AGENTS.md
