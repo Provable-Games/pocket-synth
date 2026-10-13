@@ -1,4 +1,4 @@
-# webaudio-tinysynth (Provable Games fork)
+# pocket-synth
 
 A small, dependency-free JavaScript GM synthesizer and Standard MIDI File sequencer. Sounds are generated with Web Audio oscillators and buffers; no sample downloads are needed. Quality 0 uses lightweight chiptune sounds, and quality 1 uses FM sounds with multiple operators.
 
