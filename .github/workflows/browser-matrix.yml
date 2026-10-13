@@ -16,10 +16,6 @@ name: Browser matrix
 #                          known-failure policy. Its summary lists measured
 #                          times per shard and per spec.
 #
-# Core jobs run on hosted ARM runners (ubuntu-24.04-arm) like the other
-# workflows; Playwright publishes linux-arm64 builds of all three engines. The
-# manual full-mix qualification jobs stay on x64 (see their comment).
-#
 # A browser that cannot be installed or launched fails its job; nothing is
 # skipped. Core CI opts into the documented known-failure policy; the strict
 # full-mix qualification job below does not. To change the shard count, change
@@ -55,7 +51,9 @@ jobs:
   browser:
     name: browser (${{ matrix.engine }}, ${{ matrix.shard }}/3)
     if: ${{ github.event_name != 'workflow_dispatch' || inputs.mode == 'core' }}
-    runs-on: ubuntu-24.04-arm
+    # Stays on x64: hosted ARM runs failed during #95, and tests/browser/tolerances.js
+    # was measured on linux-x64. ARM runners cost the same in this public repository.
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -89,6 +87,12 @@ jobs:
       # (dist.yml regenerates it after merging); the matrix tests a fresh build.
       - name: Fresh build of the current source into .build/
         run: node scripts/test-build.js
+      - name: Use Ubuntu archives for Firefox dependencies
+        if: matrix.engine == 'firefox'
+        run: |
+          # The hosted runner's preferred Azure mirror stalled past the job deadline.
+          # Keep its existing signed Ubuntu archive/security fallbacks.
+          sudo sed -i '\|^http://azure\.archive\.ubuntu\.com/ubuntu/|d' /etc/apt/apt-mirrors.txt
       - name: Install the pinned Playwright's browser and system libraries
         run: |
           read -r -a args <<< "$INSTALL"
@@ -127,8 +131,6 @@ jobs:
   full-mix-qualification:
     name: full-mix qualification (${{ matrix.engine }})
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'full-mix-qualification' }}
-    # Stays on x64: the measured references in tests/browser/specs/full-mix-reference.json
-    # record platform linux-x64, and strict qualification matches that identity exactly.
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
@@ -188,7 +190,7 @@ jobs:
   demos:
     name: demos (${{ matrix.engine }})
     if: ${{ github.event_name != 'workflow_dispatch' || inputs.mode == 'core' }}
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     strategy:
       fail-fast: false
@@ -213,6 +215,12 @@ jobs:
           cache: npm
           cache-dependency-path: package-lock.json
       - run: npm ci
+      - name: Use Ubuntu archives for Firefox dependencies
+        if: matrix.engine == 'firefox'
+        run: |
+          # The hosted runner's preferred Azure mirror stalled past the job deadline.
+          # Keep its existing signed Ubuntu archive/security fallbacks.
+          sudo sed -i '\|^http://azure\.archive\.ubuntu\.com/ubuntu/|d' /etc/apt/apt-mirrors.txt
       - name: Install the pinned Playwright's browser and system libraries
         run: |
           read -r -a args <<< "$INSTALL"
@@ -234,7 +242,7 @@ jobs:
     name: browser matrix
     needs: [browser, demos]
     if: ${{ !cancelled() && (github.event_name != 'workflow_dispatch' || inputs.mode == 'core') }}
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -273,7 +281,6 @@ jobs:
     name: full-mix qualification aggregate
     needs: [full-mix-qualification]
     if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && inputs.mode == 'full-mix-qualification' }}
-    # On x64 with the qualification jobs it validates.
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
