@@ -429,10 +429,31 @@ function playbackState(synth) {
   }, keep));
 }
 
+/* A predicate for the trace lines of the fork's stopMIDI() cleanup on `synth` as it stands now, which
+   upstream's loadMIDI lacks: cancels on the channel volume, modulation and pan params, and every call on
+   a percussion hit already scheduled. Never true for a synth without that cleanup (upstream). */
+function stopCleanup(synth) {
+  if (!synth.chmod || !synth._src) return () => false;
+  const ch = new Set([...synth.chvol, ...synth.chmod].map((n) => n.gain._id).concat(synth.chpan.filter(Boolean).map((n) => n.pan._id)));
+  const hits = new Set(synth._src.filter((v) => v.ch === 9).flatMap((v) => v.o.concat(v.g, v.q || []).filter(Boolean).map((n) => n._id)));
+  return (line) => {
+    const [op, ...args] = JSON.parse(line);
+    return op === "cancel" && ch.has(args[0]) || args.some((a) => typeof a === "string" && hits.has(a.split(".")[0]));
+  };
+}
+
+/* loadMIDI on a createSynth() result, then drop that load's stopMIDI() cleanup from its trace, so the
+   trace compares with upstream's. */
+function loadAsUpstream(r, buf) {
+  const from = r.trace.length, own = stopCleanup(r.synth);
+  r.synth.loadMIDI(buf);
+  for (let i = r.trace.length - 1; i >= from; --i) if (own(r.trace[i])) r.trace.splice(i, 1);
+}
+
 module.exports = {
   ROOT, UPSTREAM_COMMIT, UPSTREAM_SHA256,
   FORK_PATCHES, fail, sha256, upstreamSource, applyPatches, referenceSource, forkVariants,
   createEnvironment, createSynth, toArrayBuffer, runUntil,
   makeMidi, midi,
-  vlq, trackBytes, chunk, smf, playStatus, statusOf, playbackState,
+  vlq, trackBytes, chunk, smf, playStatus, statusOf, playbackState, stopCleanup, loadAsUpstream,
 };

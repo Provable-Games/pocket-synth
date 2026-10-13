@@ -26,8 +26,8 @@ const TAIL_MS = 15000;       // keep the clock running after the song ends
 const MAX_MS = 60 * 60 * 1000;
 
 function run(source, label, midiBytes) {
-  const { synth, env, trace, notes } = H.createSynth(source, label);
-  synth.loadMIDI(H.toArrayBuffer(midiBytes));
+  const r = H.createSynth(source, label), { synth, env, trace, notes } = r;
+  H.loadAsUpstream(r, H.toArrayBuffer(midiBytes)); // without the fork's stopMIDI() cleanup
   synth.setLoop(0);
   synth.playMIDI();
   const st = synth.getPlayStatus();

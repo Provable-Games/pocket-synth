@@ -705,6 +705,32 @@ describe.each(variants)("$name: setAudioContext() replacement (#11)", (variant) 
     expect(s.synth.getAudioContext()).toBe(ctx);
   });
 
+  const FACTORIES = ["createGain", "createDynamicsCompressor", "createConvolver", "createBuffer",
+    "createOscillator", "createBufferSource", "createBiquadFilter", "createPeriodicWave"];
+
+  test.each(FACTORIES)("a context without %s throws a TypeError before the synth's own context is closed", (k) => {
+    const s = make(variant);
+    const ctx = s.synth.getAudioContext(), stub = Object.assign(new s.Base(), { [k]: undefined }), from = s.trace.length;
+    expect(thrown(() => s.synth.setAudioContext(stub)).name).toBe("TypeError");
+    expect(s.trace.slice(from)).toEqual([]);
+    expect([s.synth.getAudioContext(), ctx.state]).toEqual([ctx, "running"]);
+    s.synth.noteOn(0, 60, 100);
+    expect(s.notes).toHaveLength(1); // the synth keeps working on its context
+    expect(thrown(() => new s.Synth({ context: Object.assign(new s.Base(), { [k]: undefined }) })).name).toBe("TypeError");
+  });
+
+  test("createStereoPanner is optional, and createConvolver is needed only with reverb", () => {
+    const s = make(variant);
+    const noPan = Object.assign(new s.Base(), { createStereoPanner: undefined });
+    s.synth.setAudioContext(noPan);
+    expect(s.synth.getAudioContext()).toBe(noPan);
+    const noConv = () => Object.assign(new s.Base(), { createConvolver: undefined });
+    expect(new s.Synth({ context: noConv(), useReverb: 0 }).getAudioContext()).toBeTruthy();
+    const dry = new s.Synth({ useReverb: 0 }), ctx = noConv();
+    dry.setAudioContext(ctx);
+    expect(dry.getAudioContext()).toBe(ctx);
+  });
+
   test("an OfflineAudioContext stops MIDI playback", () => {
     const s = make(variant);
     s.synth.loadMIDI(MIXED);
@@ -896,16 +922,17 @@ describe.each(variants)("$name: stopMIDI() silences what the transport scheduled
     expect(at(t1)).toEqual([3 * 20 * 20 / (127 * 127), -1, 64 * 100 / 127]); // the latest values, from the resume on
   });
 
-  test("loadMIDI's internal stop keeps the upstream calls: no cancel and no drum stop", () => {
+  test("loadMIDI stops the old song as stopMIDI() does: queued changes cancelled, scheduled drum hits stopped", () => {
     const s = make(variant);
     playUntilDrumAhead(s);
     const params = channelParams(s.synth);
-    const hits = s.synth._src.filter((v) => v.ch === 9).flatMap(ids);
+    const hits = s.synth._src.filter((v) => v.ch === 9 && v.e > s.env.clock.ms / 1000).flatMap((v) => v.o.map((o) => o._id));
     const from = s.trace.length;
     s.synth.loadMIDI(MIXED);
     const after = calls(s.trace, from);
-    expect(after.filter(([op, id]) => op === "cancel" && params.has(id))).toEqual([]);
-    expect(after.filter(([, id]) => hits.includes(id))).toEqual([]);
+    expect(new Set(after.filter(([op, id]) => op === "cancel" && params.has(id)).map(([, id]) => id))).toEqual(params);
+    for (const id of hits) expect(after).toContainEqual(["stop", id, null]);
+    expect([s.synth._src.some((v) => v.ch === 9), s.synth._rs]).toEqual([false, 0]); // _rs: reset() set every channel
   });
 
   test("stopMIDI() used as an event listener (an Event argument) is still a full stop", () => {

@@ -19,7 +19,7 @@ Modifications by Provable Games, based on upstream commit
     loops and empty songs, and rebuilt tempo/channel state on seek/replay.
   - Added context/destination/lazy constructor options and
     resume()/dispose(). Released voices, nodes and timers; closed only
-    synth-owned contexts. Stop/seek cancel drums and queued controllers.
+    synth-owned contexts. Stop, seek and song replacement cancel drums and queued controllers.
     Rejected realtime sequencing on OfflineAudioContext and handled
     resume promise failures.
   - Added autoResume (default true) for application-controlled audio

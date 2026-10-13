@@ -92,7 +92,7 @@ These functions are available on a `WebAudioTinySynth` instance. Volume, quality
 >  On an OfflineAudioContext, schedule notes with explicit times; `playMIDI()` throws there. Every note scheduled before the render counts against `voices`, so call `setVoices()` with at least the number of notes, or the earliest ones are dropped.
 >
 >  For example, `new WebAudioTinySynth({quality:0, useReverb:0, voices:32})`  
->  An invalid `context`, `destination`, `lazy` or `autoResume` throws a `TypeError`, and an invalid `seed` a `TypeError` (not a number) or a `RangeError` (not an integer from 0 to 4294967295), before anything is created.
+>  An invalid `context` (see `setAudioContext()` for what it needs), `destination`, `lazy` or `autoResume` throws a `TypeError`, and an invalid `seed` a `TypeError` (not a number) or a `RangeError` (not an integer from 0 to 4294967295), before anything is created.
 
 #### getAudioContext()
 
@@ -100,7 +100,7 @@ These functions are available on a `WebAudioTinySynth` instance. Volume, quality
 
 #### setAudioContext(audioContext, destinationNode)
 
-> Replaces the current context with `audioContext`.
+> Replaces the current context with `audioContext`. It must have a `destination` and the factories the synth uses (`createGain`, `createDynamicsCompressor`, `createBuffer`, `createOscillator`, `createBufferSource`, `createBiquadFilter`, `createPeriodicWave`, and `createConvolver` when `useReverb` is on; `createStereoPanner` is optional); otherwise, or for a `destinationNode` without `connect()` or of another context, it throws a `TypeError` and the current context stays installed and open.
 > Routes sounds to `destinationNode`, or to `audioContext.destination` if omitted.
 > Get the installed context with `getAudioContext()`.
 > The previous context's sounds stop, and the synth closes it if it created it. Call `stopMIDI()` before switching contexts during playback: the sequencer keeps the old context's clock, as upstream, so playback on a new context waits until that context's clock catches up.
@@ -151,7 +151,8 @@ These functions are available on a `WebAudioTinySynth` instance. Volume, quality
 
 #### getTimbreName(m,n)
 
-> get name of specified timbre. m=0:normal channel voice,n=prog#. or m=1:drum track,n=note#
+> get name of specified timbre. m=0:normal channel voice,n=prog#. or m=1:drum track,n=note#  
+> n is 0–127 for programs and 35–81 for drums; other values throw a `RangeError`. A program slot above 127 that a caller added itself and `setProgram()` accepts (see `setProgram`) is also named.
 
 #### setSampleWave(name, samples)
 
@@ -188,7 +189,7 @@ These functions are available on a `WebAudioTinySynth` instance. Volume, quality
 
 #### loadMIDI(mididata)
 
-> load MIDI data to built-in sequencer. mididata is a arraybuffer of SMF (.mid file contents).  
+> load MIDI data to built-in sequencer. mididata is a arraybuffer of SMF (.mid file contents). A successful load stops the current song as `stopMIDI()` does, so none of its scheduled notes, drum hits or channel volume, pan and modulation changes reach the new song.  
 > Parsing uses bounded reads. Errors preserve the previous song, playback and channel state, and include `code`, byte `offset` and, inside a track, 0-based `track`:
 >
 > | Code | Reason |
@@ -207,7 +208,7 @@ These functions are available on a `WebAudioTinySynth` instance. Volume, quality
 
 #### playMIDI()
 
-> play loaded MIDI data. On a finished song, starts again from the beginning at the song's initial tempo and channel state. Does nothing for a song with no playable events. A looping song that cannot advance (all events on one tick with `loopEnd` unset) plays once and stops. Each timer callback processes at most 1000 events; the rest follow in order. Replay does not cut notes still sounding from the previous pass. The first `playMIDI()` on each context installation first generates the metallic noise (see `prewarm()`) and only then reads the clock, so the song starts slightly later and nothing within it shifts.
+> play loaded MIDI data. On a finished song (every event sent, even while its last notes still ring), starts again from the beginning at the song's initial tempo and channel state. Does nothing for a song with no playable events. A looping song that cannot advance (all events on one tick with `loopEnd` unset) plays once and stops. Each timer callback processes at most 1000 events; the rest follow in order. Replay does not cut notes still sounding from the previous pass; those ringing tails share their channels with the new pass, so they take on its channel reset and the new pass's volume, pan and modulation changes. The first `playMIDI()` on each context installation first generates the metallic noise (see `prewarm()`) and only then reads the clock, so the song starts slightly later and nothing within it shifts.
 
 #### stopMIDI()
 

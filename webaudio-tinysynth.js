@@ -677,8 +677,14 @@ function WebAudioTinySynthCore(target) {
       }
       return this._dp;
     },
-    _check:(c,d)=>{
-      if(!c || typeof c.createGain!="function" || !c.destination)
+    _check:(c,d,r)=>{
+      /* Before anything changes: c has a destination and every factory the graph and the
+         voices call, so a context that cannot be installed never replaces the current one.
+         createConvolver is needed only with reverb r (default useReverb); createStereoPanner
+         is optional, as the graph connects channels directly without it. */
+      const f="Gain DynamicsCompressor Buffer Oscillator BufferSource BiquadFilter PeriodicWave"
+        +((r===undefined ? this.useReverb : r) ? " Convolver" : "");
+      if(!c || !c.destination || f.split(" ").some(k=>typeof c["create"+k]!="function"))
         throw new TypeError("context");
       if(d!=undefined && (typeof d.connect!="function" || d.context && d.context!=c))
         throw new TypeError("destination");
@@ -762,8 +768,8 @@ function WebAudioTinySynthCore(target) {
          event at or after tick; with none left, curTick is maxTick and play restarts.
          Without a song this does nothing. Queued channel volume, pan and modulation
          changes (from the scheduler's lookahead or a timed send()) are cancelled first, by
-         stopMIDI(), so they cannot override the rebuilt state. loadMIDI passes load, which
-         stops as upstream instead and keeps the upstream load calls (D-019, D-023). */
+         stopMIDI(), so they cannot override the rebuilt state. loadMIDI, which has already
+         called stopMIDI(), passes load to stop as upstream only (D-019, D-023). */
       const s=this.song,p=this.playing;
       let i,e;
       if(!s)
@@ -786,7 +792,14 @@ function WebAudioTinySynthCore(target) {
         this.playMIDI();
     },
     getTimbreName:(m,n)=>{
-      return this._slot(m,n).name;
+      /* Programs 0-127 and drums 35-81 (_slot), plus a program slot above 127 a caller added
+         itself, which setProgram() also accepts (TinyChip, D-031): one with a timbre (p). */
+      const v=this._num("m",m,1,1) ? 0 : this._num("program",n,1/0,1);
+      if(v<128)
+        return this._slot(m,n).name;
+      if(!(this.program[v]||0).p)
+        throw new RangeError("program out of range: "+v);
+      return this.program[v].name;
     },
     loadMIDIfromSrc:()=>{
       return this.loadMIDIUrl(this.src);
@@ -864,8 +877,9 @@ function WebAudioTinySynthCore(target) {
       this.rhythm[9]=1;
     },
     _halt:()=>{
-      /* The upstream stop, kept for loadMIDI's internal stops (D-023). A load sets every
-         channel again, so nothing is left to apply on the next playMIDI(). */
+      /* The upstream stop: melodic voices only; queued automation and percussion hits stay
+         (stopMIDI() cancels them). Used by stopMIDI() and by locateMIDI(0,1) after loadMIDI's
+         stopMIDI() (D-023). It clears _rs, as the load's reset() sets every channel again. */
       this.playing=this._rs=0;
       for(var i=0;i<16;++i)
         this.allSoundOff(i);
@@ -899,7 +913,7 @@ function WebAudioTinySynthCore(target) {
       if(!this._live())
         return;
       /* A song with no events other than tempo (empty, metadata-only or tempo-only)
-         stays stopped (#9). A completed song (not one just loaded at maxTick) starts a
+         stays stopped (#9). A completed song (every event sent, even if notes still ring) starts a
          new pass with the state of locateMIDI(0) (#10, D-005), but the previous pass's
          sounding and already scheduled notes play on, as upstream (D-019): its voices are
          kept out of the seek's reach. A song stopped before its end resumes as it is. */
@@ -914,7 +928,7 @@ function WebAudioTinySynthCore(target) {
          callback can take longer than the 0.1 s start and the 0.2 s lead, and would sound after
          the notes sent with it. The clock is read after the build, so the whole song shifts. */
       this.prewarm();
-      if(this.playIndex && this.playTick>=this.maxTick)
+      if(this.playIndex>=s.ev.length)
         this.notetab=[], this._src=[], this.playing=0, this.locateMIDI(0), this.notetab=n, this._src=d;
       if(this._rs) // after a caller's stop: the channels' latest values, now (review F1)
         for(let i=this._rs=0;i<16;++i)
@@ -1072,7 +1086,7 @@ function WebAudioTinySynthCore(target) {
         ++tr;
       }
       song.ev.sort(function(x,y){return x.t-y.t});
-      this._halt(); // internal: the upstream calls (D-023)
+      this.stopMIDI(); // queued channel automation and drum hits would reach the new song
       if(tr)
         this.notetab.length=0;
       this.maxTick=maxTick;
@@ -1132,7 +1146,7 @@ function WebAudioTinySynthCore(target) {
              unsupported compatibility path, an n* or w* name a caller wrote into noiseBuf or wave
              itself, as TinyChip does (D-031); _note plays that one as before (440 basis). */
           const w=c.w,b=typeof w=="string" && (w[0]=="n" ? this.noiseBuf : w[0]=="w" && this.wave);
-          if(!"sine square sawtooth triangle w9999 n0 n1".split(" ").includes(w) && !this._wv.has(w) && !(b && {}.hasOwnProperty.call(b,w)))
+          if("sine square sawtooth triangle w9999 n0 n1".split(" ").indexOf(w)<0 && !this._wv.has(w) && !(b && {}.hasOwnProperty.call(b,w)))
             throw new TypeError("unknown wave: "+w);
         }
       }
@@ -1149,7 +1163,7 @@ function WebAudioTinySynthCore(target) {
             throw new TypeError(k+" without fl");
       }
       else{
-        if(!["lowpass","highpass","bandpass"].includes(c.fl))
+        if(["lowpass","highpass","bandpass"].indexOf(c.fl)<0)
           throw new TypeError("fl: "+String(c.fl));
         if(c.g)
           throw new TypeError("fl on a modulator");
@@ -1786,8 +1800,9 @@ class WebAudioTinySynth {
     this._autoResume=a!==false;
     if(l!=undefined && typeof l!="boolean" || l && c!=undefined)
       throw new TypeError("lazy");
+    const {useReverb:r,quality:q,voices:v}=opt||{};
     if(c!=undefined || d!=undefined) // a destination without a context fails as "context"
-      this._check(c,d);
+      this._check(c,d,r!=undefined ? r : this.useReverb);
     /* The buffer seed (#7, D-004), also checked first: an integer from 0 to 2^32-1, default
        0. The seed and the buffer generation version are read-only properties. */
     let {seed:s}=opt||{};
@@ -1799,7 +1814,6 @@ class WebAudioTinySynth {
       throw new RangeError("seed must be an integer from 0 to 4294967295");
     Object.defineProperties(this,{seed:{value:s>>>0,enumerable:true},bufferVersion:{value:1,enumerable:true}});
     this._lazy=l;
-    const {useReverb:r,quality:q,voices:v}=opt||{};
     if(r!=undefined)
       this.useReverb=r;
     this.setQuality(q); // once (#18): undefined or null installs the default quality, 1
