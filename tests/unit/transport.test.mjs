@@ -422,10 +422,9 @@ describe.each(MODES)("$name: seeking (#21)", ({ variant, quality }) => {
       const resume = resumeTick(tick);
       expect(s.synth.getPlayStatus()).toEqual(H.playStatus(0, 2640, resume));
       const after = playAndDescribe(s, names);
-      // Legacy rule (D-005): when the next event is at maxTick, the song counts as completed and play restarts.
-      const k = resume >= 2640 ? 0 : RICH_NOTES.findIndex((t) => t >= tick);
-      const from = resume >= 2640 ? 0 : resume;
-      expect(after.notes.map(untimed)).toEqual(oracle.notes.slice(k).map(untimed));
+      // Events remain at every target (the last is at maxTick), so play resumes there instead of restarting.
+      const k = RICH_NOTES.findIndex((t) => t >= tick), from = resume;
+      expect(after.notes.map(untimed)).toEqual(k < 0 ? [] : oracle.notes.slice(k).map(untimed));
       after.notes.forEach((n, i) => close(n.t, at(RICH_TEMPOS, RICH_NOTES[k + i]) - at(RICH_TEMPOS, from)));
     });
   });
@@ -714,6 +713,34 @@ describe.each(variants)("$name: seek positions, overrides and edge cases (#21)",
     const p = playPass(s);
     expect(p.times).toHaveLength(2);
     close(p.times[1], 1); // the whole song again: 960 ticks at 120 BPM
+  });
+
+  /* The final note starts on the tick its predecessor ends, and the last event is at maxTick. */
+  const LAST = [noteOn(0, 0, 60, 100), noteOff(480, 0, 60), noteOn(480, 0, 62, 100), noteOff(1920, 0, 62)];
+
+  test("stopping during the final held note and playing again resumes it, not the song", () => {
+    const s = synthFor(variant);
+    s.synth.loadMIDI(H.toArrayBuffer(H.makeMidi(PPQ, LAST)));
+    s.synth.setLoop(0);
+    s.synth.playMIDI();
+    H.runUntil(s.env, () => s.synth.getPlayStatus().curTick >= 1920, 10 * 1000);
+    s.synth.stopMIDI();
+    expect(s.synth.getPlayStatus()).toEqual(H.playStatus(0, 1920, 1920));
+    expect(playPass(s).notes).toHaveLength(0); // only the final note-off was left
+    expect(playPass(s).notes).toHaveLength(2); // now completed: the whole song again
+  });
+
+  test("seeking into the final note resumes there, not from tick 0", () => {
+    const s = synthFor(variant);
+    s.synth.loadMIDI(H.toArrayBuffer(H.makeMidi(PPQ, LAST)));
+    s.synth.setLoop(0);
+    s.synth.locateMIDI(1000);
+    expect(s.synth.getPlayStatus()).toEqual(H.playStatus(0, 1920, 1920));
+    expect(playPass(s).notes).toHaveLength(0);
+    s.synth.locateMIDI(480);
+    const p = playPass(s);
+    expect(p.notes).toHaveLength(1);
+    close(p.times[0], 0);
   });
 
   test("without a song, locateMIDI does nothing", () => {

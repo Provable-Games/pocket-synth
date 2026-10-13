@@ -207,7 +207,7 @@ These functions are available on a `WebAudioTinySynth` instance. Volume, quality
 
 #### playMIDI()
 
-> play loaded MIDI data. On a finished song, starts again from the beginning at the song's initial tempo and channel state. Does nothing for a song with no playable events. A looping song that cannot advance (all events on one tick with `loopEnd` unset) plays once and stops. Each timer callback processes at most 1000 events; the rest follow in order. Replay does not cut notes still sounding from the previous pass. The first `playMIDI()` on each context installation first generates the metallic noise (see `prewarm()`) and only then reads the clock, so the song starts slightly later and nothing within it shifts.
+> play loaded MIDI data. On a finished song (every event sent, even while its last notes still ring), starts again from the beginning at the song's initial tempo and channel state. Does nothing for a song with no playable events. A looping song that cannot advance (all events on one tick with `loopEnd` unset) plays once and stops. Each timer callback processes at most 1000 events; the rest follow in order. Replay does not cut notes still sounding from the previous pass. The first `playMIDI()` on each context installation first generates the metallic noise (see `prewarm()`) and only then reads the clock, so the song starts slightly later and nothing within it shifts.
 
 #### stopMIDI()
 

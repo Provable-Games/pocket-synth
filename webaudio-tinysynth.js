@@ -899,7 +899,7 @@ function WebAudioTinySynthCore(target) {
       if(!this._live())
         return;
       /* A song with no events other than tempo (empty, metadata-only or tempo-only)
-         stays stopped (#9). A completed song (not one just loaded at maxTick) starts a
+         stays stopped (#9). A completed song (every event sent, even if notes still ring) starts a
          new pass with the state of locateMIDI(0) (#10, D-005), but the previous pass's
          sounding and already scheduled notes play on, as upstream (D-019): its voices are
          kept out of the seek's reach. A song stopped before its end resumes as it is. */
@@ -914,7 +914,7 @@ function WebAudioTinySynthCore(target) {
          callback can take longer than the 0.1 s start and the 0.2 s lead, and would sound after
          the notes sent with it. The clock is read after the build, so the whole song shifts. */
       this.prewarm();
-      if(this.playIndex && this.playTick>=this.maxTick)
+      if(this.playIndex>=s.ev.length)
         this.notetab=[], this._src=[], this.playing=0, this.locateMIDI(0), this.notetab=n, this._src=d;
       if(this._rs) // after a caller's stop: the channels' latest values, now (review F1)
         for(let i=this._rs=0;i<16;++i)
