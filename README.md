@@ -92,7 +92,7 @@ These functions are available on a `WebAudioTinySynth` instance. Volume, quality
 >  On an OfflineAudioContext, schedule notes with explicit times; `playMIDI()` throws there. Every note scheduled before the render counts against `voices`, so call `setVoices()` with at least the number of notes, or the earliest ones are dropped.
 >
 >  For example, `new WebAudioTinySynth({quality:0, useReverb:0, voices:32})`  
->  An invalid `context`, `destination`, `lazy` or `autoResume` throws a `TypeError`, and an invalid `seed` a `TypeError` (not a number) or a `RangeError` (not an integer from 0 to 4294967295), before anything is created.
+>  An invalid `context` (see `setAudioContext()` for what it needs), `destination`, `lazy` or `autoResume` throws a `TypeError`, and an invalid `seed` a `TypeError` (not a number) or a `RangeError` (not an integer from 0 to 4294967295), before anything is created.
 
 #### getAudioContext()
 
@@ -100,7 +100,7 @@ These functions are available on a `WebAudioTinySynth` instance. Volume, quality
 
 #### setAudioContext(audioContext, destinationNode)
 
-> Replaces the current context with `audioContext`.
+> Replaces the current context with `audioContext`. It must have a `destination` and the factories the synth uses (`createGain`, `createDynamicsCompressor`, `createConvolver`, `createBuffer`, `createStereoPanner`, `createOscillator`, `createBufferSource`, `createBiquadFilter`, `createPeriodicWave`); otherwise, or for a `destinationNode` without `connect()` or of another context, it throws a `TypeError` and the current context stays installed and open.
 > Routes sounds to `destinationNode`, or to `audioContext.destination` if omitted.
 > Get the installed context with `getAudioContext()`.
 > The previous context's sounds stop, and the synth closes it if it created it. Call `stopMIDI()` before switching contexts during playback: the sequencer keeps the old context's clock, as upstream, so playback on a new context waits until that context's clock catches up.

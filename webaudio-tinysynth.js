@@ -678,7 +678,11 @@ function WebAudioTinySynthCore(target) {
       return this._dp;
     },
     _check:(c,d)=>{
-      if(!c || typeof c.createGain!="function" || !c.destination)
+      /* Before anything changes: c has every factory the graph and the voices use, and a
+         destination, so a context that cannot be installed never replaces the current one. */
+      const f="Gain DynamicsCompressor Convolver Buffer StereoPanner Oscillator BufferSource"
+        +" BiquadFilter PeriodicWave";
+      if(!c || !c.destination || f.split(" ").some(k=>typeof c["create"+k]!="function"))
         throw new TypeError("context");
       if(d!=undefined && (typeof d.connect!="function" || d.context && d.context!=c))
         throw new TypeError("destination");

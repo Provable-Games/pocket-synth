@@ -705,6 +705,20 @@ describe.each(variants)("$name: setAudioContext() replacement (#11)", (variant) 
     expect(s.synth.getAudioContext()).toBe(ctx);
   });
 
+  const FACTORIES = ["createGain", "createDynamicsCompressor", "createConvolver", "createBuffer", "createStereoPanner",
+    "createOscillator", "createBufferSource", "createBiquadFilter", "createPeriodicWave"];
+
+  test.each(FACTORIES)("a context without %s throws a TypeError before the synth's own context is closed", (k) => {
+    const s = make(variant);
+    const ctx = s.synth.getAudioContext(), stub = Object.assign(new s.Base(), { [k]: undefined }), from = s.trace.length;
+    expect(thrown(() => s.synth.setAudioContext(stub)).name).toBe("TypeError");
+    expect(s.trace.slice(from)).toEqual([]);
+    expect([s.synth.getAudioContext(), ctx.state]).toEqual([ctx, "running"]);
+    s.synth.noteOn(0, 60, 100);
+    expect(s.notes).toHaveLength(1); // the synth keeps working on its context
+    expect(thrown(() => new s.Synth({ context: Object.assign(new s.Base(), { [k]: undefined }) })).name).toBe("TypeError");
+  });
+
   test("an OfflineAudioContext stops MIDI playback", () => {
     const s = make(variant);
     s.synth.loadMIDI(MIXED);
