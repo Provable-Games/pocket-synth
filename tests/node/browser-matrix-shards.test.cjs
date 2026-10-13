@@ -15,8 +15,8 @@ const crypto = require("node:crypto");
 const H = require("../harness");
 const MATRIX = require("../browser/matrix").MATRIX;
 const CONTEXT = {
-  repository: "Provable-Games/webaudio-tinysynth",
-  workflowRef: "Provable-Games/webaudio-tinysynth/.github/workflows/browser-matrix.yml@refs/pull/79/merge",
+  repository: "Provable-Games/pocket-synth",
+  workflowRef: "Provable-Games/pocket-synth/.github/workflows/browser-matrix.yml@refs/pull/79/merge",
   eventName: "pull_request",
   runId: "4711223344",
   runAttempt: "1",

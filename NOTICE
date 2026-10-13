@@ -1,5 +1,5 @@
-webaudio-tinysynth (Provable Games fork)
-https://github.com/Provable-Games/webaudio-tinysynth
+pocket-synth
+https://github.com/Provable-Games/pocket-synth
 
 This product is a modified version of webaudio-tinysynth by
 Tatsuya Shinyagaito (g200kg), https://github.com/g200kg/webaudio-tinysynth,
@@ -63,7 +63,8 @@ Modifications by Provable Games, based on upstream commit
   - Added pinned, reproducible Terser builds, distribution/inline-safety
     verification, size/checksum reporting and package-install checks;
     regenerated webaudio-tinysynth.min.js and its source map.
-  - Updated the fork's package version and repository/support metadata;
+  - Renamed the package to pocket-synth; updated its version and
+    repository/support metadata;
     replaced .npmignore with an explicit package file allowlist for synth
     source/builds, LICENSE, NOTICE and README (npm also adds package.json).
   - Consolidated maintained documentation into README, NOTICE and AGENTS;
