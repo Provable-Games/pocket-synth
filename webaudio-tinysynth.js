@@ -1133,7 +1133,7 @@ function WebAudioTinySynthCore(target) {
              unsupported compatibility path, an n* or w* name a caller wrote into noiseBuf or wave
              itself, as TinyChip does (D-031); _note plays that one as before (440 basis). */
           const w=c.w,b=typeof w=="string" && (w[0]=="n" ? this.noiseBuf : w[0]=="w" && this.wave);
-          if(!"sine square sawtooth triangle w9999 n0 n1".split(" ").includes(w) && !this._wv.has(w) && !(b && {}.hasOwnProperty.call(b,w)))
+          if("sine square sawtooth triangle w9999 n0 n1".split(" ").indexOf(w)<0 && !this._wv.has(w) && !(b && {}.hasOwnProperty.call(b,w)))
             throw new TypeError("unknown wave: "+w);
         }
       }
@@ -1150,7 +1150,7 @@ function WebAudioTinySynthCore(target) {
             throw new TypeError(k+" without fl");
       }
       else{
-        if(!["lowpass","highpass","bandpass"].includes(c.fl))
+        if(["lowpass","highpass","bandpass"].indexOf(c.fl)<0)
           throw new TypeError("fl: "+String(c.fl));
         if(c.g)
           throw new TypeError("fl on a modulator");
@@ -1159,7 +1159,7 @@ function WebAudioTinySynthCore(target) {
           if(k=="ff" || v!==undefined){
             if(typeof x!="number")
               throw new TypeError(k+": "+String(v));
-            if(!(k=="fk" ? x==0 || x==1 : x>=2**-126 && f32(x)))
+            if(!(k=="fk" ? x==0 || x==1 : x>=Math.pow(2,-126) && f32(x)))
               throw new RangeError(k+": "+x);
             c[k]=x;
           }
