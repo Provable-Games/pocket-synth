@@ -1,5 +1,5 @@
 {
- "_comment": "T12 (#27) consumer filter fixture. Hand-built from onchain-tinysynth's Filter type at consumer.commit (its v1 validation still rejects filters, so its tooling cannot generate this) by _evidence/t12-filters/scratch/gen-filters-fixture.mjs. settings uses the consumer's fixed-point units (x / 10000); settings_text is its SETTINGS grammar; tinysynth lists the setTimbre(m, n, operators) calls its player's conversion plus D-007's filter mapping gives.",
+ "_comment": "T12 (#27) consumer filter fixture. Hand-built from onchain-tinysynth's Filter type at consumer.commit (its v1 validation still rejects filters, so its tooling cannot generate this). settings uses the consumer's fixed-point units (x / 10000); settings_text is its SETTINGS grammar; tinysynth lists the setTimbre(m, n, operators) calls its player's conversion plus D-007's filter mapping gives.",
  "consumer": {
   "repository": "https://github.com/Provable-Games/onchain-tinysynth",
   "commit": "d7357936754b5753ee4e9cc9134a0d373b75c099",
