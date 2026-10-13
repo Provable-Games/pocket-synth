@@ -762,8 +762,8 @@ function WebAudioTinySynthCore(target) {
          event at or after tick; with none left, curTick is maxTick and play restarts.
          Without a song this does nothing. Queued channel volume, pan and modulation
          changes (from the scheduler's lookahead or a timed send()) are cancelled first, by
-         stopMIDI(), so they cannot override the rebuilt state. loadMIDI passes load, which
-         stops as upstream instead and keeps the upstream load calls (D-019, D-023). */
+         stopMIDI(), so they cannot override the rebuilt state. loadMIDI, which has already
+         called stopMIDI(), passes load to stop as upstream only (D-019, D-023). */
       const s=this.song,p=this.playing;
       let i,e;
       if(!s)
@@ -864,8 +864,9 @@ function WebAudioTinySynthCore(target) {
       this.rhythm[9]=1;
     },
     _halt:()=>{
-      /* The upstream stop, kept for loadMIDI's internal stops (D-023). A load sets every
-         channel again, so nothing is left to apply on the next playMIDI(). */
+      /* The upstream stop: melodic voices only; queued automation and percussion hits stay
+         (stopMIDI() cancels them). Used by stopMIDI() and by locateMIDI(0,1) after loadMIDI's
+         stopMIDI() (D-023). It clears _rs, as the load's reset() sets every channel again. */
       this.playing=this._rs=0;
       for(var i=0;i<16;++i)
         this.allSoundOff(i);
@@ -1072,7 +1073,7 @@ function WebAudioTinySynthCore(target) {
         ++tr;
       }
       song.ev.sort(function(x,y){return x.t-y.t});
-      this._halt(); // internal: the upstream calls (D-023)
+      this.stopMIDI(); // queued channel automation and drum hits would reach the new song
       if(tr)
         this.notetab.length=0;
       this.maxTick=maxTick;

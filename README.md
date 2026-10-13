@@ -188,7 +188,7 @@ These functions are available on a `WebAudioTinySynth` instance. Volume, quality
 
 #### loadMIDI(mididata)
 
-> load MIDI data to built-in sequencer. mididata is a arraybuffer of SMF (.mid file contents).  
+> load MIDI data to built-in sequencer. mididata is a arraybuffer of SMF (.mid file contents). A successful load stops the current song as `stopMIDI()` does, so none of its scheduled notes, drum hits or channel volume, pan and modulation changes reach the new song.  
 > Parsing uses bounded reads. Errors preserve the previous song, playback and channel state, and include `code`, byte `offset` and, inside a track, 0-based `track`:
 >
 > | Code | Reason |

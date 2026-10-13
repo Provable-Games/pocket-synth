@@ -634,14 +634,16 @@ describe.each(MODES)("$name: seeking (#21)", ({ variant, quality }) => {
     expect([ROUND(vol.at(t)), pan2.at(t), mod3.at(t), ROUND(vol4.at(t))]).toEqual([ROUND(3 * 50 * 50 / (127 * 127)), 0, 0, full]);
   });
 
-  test("a load cancels no channel automation, even replacing a playing song", () => {
+  test("a load replacing a playing song cancels every channel's queued automation from now", () => {
     const s = make();
     s.synth.loadMIDI(H.toArrayBuffer(RICH_BYTES));
     s.synth.playMIDI();
     H.runUntil(s.env, () => false, 1000);
-    const from = s.trace.length;
-    s.synth.loadMIDI(H.toArrayBuffer(RICH_BYTES)); // loadMIDI stops it first; its calls stay those of upstream
-    expect(channelCancels(s.synth, s.trace.slice(from))).toEqual([]);
+    const from = s.trace.length, now = s.synth.getAudioContext().currentTime;
+    s.synth.loadMIDI(H.toArrayBuffer(RICH_BYTES)); // loadMIDI stops it first, as stopMIDI() does
+    const cancels = channelCancels(s.synth, s.trace.slice(from));
+    expect(new Set(cancels.map(([id]) => id))).toEqual(channelParamIds(s.synth));
+    for (const [, t] of cancels) expect(t).toBe(now);
   });
 
   test("an immediate replay after the end is not overridden by changes the last pass queued", () => {
@@ -683,6 +685,37 @@ describe.each(MODES)("$name: seeking (#21)", ({ variant, quality }) => {
     const full = ROUND(3 * 100 * 100 / (127 * 127));
     for (const t of [0.6, 0.64, 1.1]) expect(ROUND(vol.at(t)), "at " + t + " s").toBe(full);
     expect(vol.at(1.15)).toBe(0);
+  });
+
+  test("loading a song mid-play cancels the old song's queued automation and drum hits; an invalid load changes nothing", () => {
+    const s = make();
+    const dense = [noteOn(0, 0, 60, 100), noteOff(1920, 0, 60)];
+    for (let t = 0; t < 1920; t += 60) dense.push(cc(t, 0, 7, t % 120 ? 0 : 127), noteOn(t, 9, 38, 90));
+    s.synth.loadMIDI(H.toArrayBuffer(withEot(dense, 1920)));
+    s.synth.setLoop(0);
+    const vol = timeline(s.synth.chvol[0].gain, s.env.clock), now = () => s.env.clock.ms / 1000;
+    s.synth.playMIDI();
+    H.runUntil(s.env, () => s.env.clock.ms >= 420, 2000);
+    expect(vol.at(0.55)).toBe(0); // queued ahead by the old song (tick 420)
+    expect(s.synth._src.some((v) => v.ch === 9 && v.t > now())).toBe(true);
+    // An invalid file throws and leaves the song, playback and queued state as they were.
+    const before = [s.synth.song, s.synth.getPlayStatus(), s.synth._src.length, JSON.stringify(H.playbackState(s.synth))];
+    expect(() => s.synth.loadMIDI(new ArrayBuffer(8))).toThrow();
+    expect([s.synth.song, s.synth.getPlayStatus(), s.synth._src.length, JSON.stringify(H.playbackState(s.synth))]).toEqual(before);
+    s.synth.loadMIDI(H.toArrayBuffer(withEot([noteOn(0, 1, 64, 100), noteOff(480, 1, 64)], 1920)));
+    expect(s.synth._src.some((v) => v.ch === 9)).toBe(false);
+    const full = ROUND(3 * 100 * 100 / (127 * 127)); // reset(): volume 100, expression 127
+    for (const t of [0.43, 0.5, 0.55, 0.7]) expect(ROUND(vol.at(t)), "at " + t + " s").toBe(full);
+  });
+
+  test("a timed volume change sent before the first load does not override the loaded song", () => {
+    const s = make();
+    const vol = timeline(s.synth.chvol[0].gain, s.env.clock);
+    s.synth.send([0xb0, 7, 0], 0.5); // volume 0 at 0.5 s
+    expect(vol.at(0.5)).toBe(0);
+    s.synth.loadMIDI(H.toArrayBuffer(withEot([noteOn(0, 0, 60, 100), noteOff(960, 0, 60)], 960)));
+    const full = ROUND(3 * 100 * 100 / (127 * 127)); // reset(): volume 100, expression 127
+    for (const t of [0, 0.5, 1]) expect(ROUND(vol.at(t)), "at " + t + " s").toBe(full);
   });
 
   test("a song loaded at maxTick keeps settings made after loading on its first play; its replay restores the baseline", () => {

@@ -72,9 +72,12 @@ const parityFiles = [
   { name: "ntrks 0", bytes: H.smf(0, 480, [], { ntrks: 0 }) },
 ];
 
-/* Load `bytes` into `s.synth` under a vm timeout; return what loadMIDI produced and the WebAudio calls it made. */
-function load(s, bytes) {
+/* Load `bytes` into `s.synth` under a vm timeout; return what loadMIDI produced and the WebAudio calls it made.
+   With `fork`, the calls leave out the fork's stopMIDI() cleanup, which upstream's load lacks: cancels on the
+   channel volume, modulation and pan params, and every call on a percussion hit scheduled before the load. */
+function load(s, bytes, fork) {
   const from = s.trace.length;
+  const own = fork ? H.stopCleanup(s.synth) : () => false;
   const buf = H.toArrayBuffer(Buffer.from(bytes));
   let error = null;
   try {
@@ -83,7 +86,7 @@ function load(s, bytes) {
     error = e.code || e.message;
   }
   const song = s.synth.song && JSON.parse(JSON.stringify(s.synth.song));
-  return { error, song, maxTick: s.synth.maxTick, status: H.statusOf(s.synth), playIndex: s.synth.playIndex, calls: s.trace.slice(from) };
+  return { error, song, maxTick: s.synth.maxTick, status: H.statusOf(s.synth), playIndex: s.synth.playIndex, calls: s.trace.slice(from).filter((l) => !own(l)) };
 }
 
 function playing(variant) {
@@ -103,7 +106,7 @@ const idleSynth = (v) => idle.get(v.name) || idle.set(v.name, H.createSynth(v.so
 test.describe("valid files parse exactly as the baseline parser", () => {
   for (const file of parityFiles) {
     test(file.name, () => {
-      const [ref, ...forks] = all.map((v) => load(idleSynth(v), file.bytes));
+      const [ref, ...forks] = all.map((v) => load(idleSynth(v), file.bytes, v !== REFERENCE));
       assert.equal(ref.error, null, "the reference failed on " + file.name);
       for (const [i, r] of forks.entries()) assert.deepEqual(r, ref, builds[i].name + ": " + file.name);
     });
@@ -113,7 +116,7 @@ test.describe("valid files parse exactly as the baseline parser", () => {
     for (const file of [parityFiles[0], parityFiles.find((f) => f.name.startsWith("consumer"))]) {
       const [ref, ...forks] = all.map((v) => {
         const s = playing(v);
-        const r = { load: load(s, file.bytes), state: H.playbackState(s.synth) };
+        const r = { load: load(s, file.bytes, v !== REFERENCE), state: H.playbackState(s.synth) };
         delete r.state.loopEnd; // a fork property (setLoopEnd) that upstream lacks
         return r;
       });
