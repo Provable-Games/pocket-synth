@@ -1158,7 +1158,7 @@ function WebAudioTinySynthCore(target) {
           if(k=="ff" || v!==undefined){
             if(typeof x!="number")
               throw new TypeError(k+": "+String(v));
-            if(!(k=="fk" ? x==0 || x==1 : x>=2**-126 && f32(x)))
+            if(!(k=="fk" ? x==0 || x==1 : x>=Math.pow(2,-126) && f32(x)))
               throw new RangeError(k+": "+x);
             c[k]=x;
           }
