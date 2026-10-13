@@ -404,9 +404,29 @@ Tests, `size` and `pack:check` build current source into ignored `.build/` and l
 
 For browser checks, install the pinned Playwright browsers (`npx playwright-core install --with-deps`; Chromium smoke needs only `--only-shell chromium`). CI runs lint, build checks, tests, browser smoke and the sharded browser matrix, all on hosted ARM runners (`ubuntu-24.04-arm`). The smoke test allows autoplay and does not verify the user-gesture requirement.
 
-Ordinary browser CI accepts only the narrowly approved exceptions in [tests/browser/lib/known-failures.js](tests/browser/lib/known-failures.js), tracked in [#96](https://github.com/Provable-Games/pocket-synth/issues/96) and [#97](https://github.com/Provable-Games/pocket-synth/issues/97). Local defaults remain strict. Original failed assertions, tolerances and first-attempt artifacts remain preserved; clean diagnostic rerenders do not clear a failed first attempt. Original capture evidence is retained outside this repository. Unknown failures remain blocking. The manual `full-mix-qualification` workflow lane remains strict and does not use these exceptions; incomplete references or failed first captures prevent qualification. It runs on x64 because its measured references record platform `linux-x64`, which a qualification report must match exactly. Native macOS runtime behavior remains unverified.
+Ordinary browser CI accepts only the narrowly approved exceptions in [tests/browser/lib/known-failures.js](tests/browser/lib/known-failures.js), tracked in [#96](https://github.com/Provable-Games/pocket-synth/issues/96) and [#97](https://github.com/Provable-Games/pocket-synth/issues/97). Local defaults remain strict. Original failed assertions, tolerances and first-attempt artifacts remain preserved; clean diagnostic rerenders do not clear a failed first attempt. Original capture evidence is retained outside this repository. Unknown failures remain blocking. The manual `full-mix-qualification` workflow lane remains strict and does not use these exceptions; incomplete references or failed first captures prevent qualification. It runs on ARM like the rest of CI, and its measured references record platform `linux-arm64`, which a qualification report must match exactly. Native macOS runtime behavior remains unverified.
 
 Agent work commands, repository constraints and AI-review configuration are in [AGENTS.md](AGENTS.md).
+
+### Recapturing the full-mix reference
+
+The strict qualification lane compares each engine's first-attempt renders with [tests/browser/specs/full-mix-reference.json](tests/browser/specs/full-mix-reference.json). The reference is bound to the raw bytes of the method files (`METHOD_FILES` in [tests/browser/specs/full-mix.js](tests/browser/specs/full-mix.js), including [scripts/reanalyze-fullmix-v6.js](scripts/reanalyze-fullmix-v6.js)), to the browser bundles of the pinned `playwright-core`, and to platform `linux-arm64`. `npm run test:node` fails when it no longer matches them; recapture it in CI, in the same pull request:
+
+```sh
+# Finish every method-file edit and push it first: a later edit invalidates the capture.
+gh workflow run browser-matrix.yml --ref <branch> -f mode=full-mix-qualification
+# The aggregate fails against the stale reference; each engine job still uploads its
+# first attempts. Artifacts are kept 7 days: download them outside the repository.
+gh run download <run-id> --pattern 'full-mix-qualification-*' --dir <evidence>
+node scripts/reanalyze-fullmix-v6.js \
+  --input=<evidence>/full-mix-qualification-chromium/browser-matrix \
+  --input=<evidence>/full-mix-qualification-firefox/browser-matrix \
+  --input=<evidence>/full-mix-qualification-webkit/browser-matrix \
+  --out=<evidence>/reanalysis.json --reference-out=tests/browser/specs/full-mix-reference.json
+# Commit the reference, then dispatch the qualification again; its aggregate must pass.
+```
+
+The exporter requires the three reports to come from one run, attempt, commit, configuration and toolchain, and exports only clean first attempts. A case whose first attempt failed stays in `coverage.incompleteCases` with its measured reason, which keeps the lane failing; [tests/node/full-mix-reference.test.cjs](tests/node/full-mix-reference.test.cjs) lists the documented incomplete cases. Never re-run a capture run (`gh run rerun` replaces the earlier attempt's artifacts) and never promote a diagnostic repeat; dispatch a new run instead.
 
 ## Distribution verification and releases
 
