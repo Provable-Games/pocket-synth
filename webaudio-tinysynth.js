@@ -2,7 +2,7 @@
  * webaudio-tinysynth by Tatsuya Shinyagaito (g200kg)
  * https://github.com/g200kg/webaudio-tinysynth - Apache License 2.0
  *
- * Modified by Provable Games (https://github.com/Provable-Games/webaudio-tinysynth);
+ * Modified by Provable Games as pocket-synth (https://github.com/Provable-Games/pocket-synth);
  * see NOTICE for the changes, including app-controlled AudioContext suspension.
  */
 ( function(window){

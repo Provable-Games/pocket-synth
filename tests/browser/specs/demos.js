@@ -1288,7 +1288,7 @@ function editorCase() {
  * this fork and upstream (T9-10, J5), declares every global it uses (X7), and soundedit's editor
  * fits its container (E14), says its Patch text is output only (E13) and has no typos in About.
  */
-const FORK_URL = "https://github.com/Provable-Games/webaudio-tinysynth";
+const FORK_URL = "https://github.com/Provable-Games/pocket-synth";
 const UPSTREAM_URL = "https://github.com/g200kg/webaudio-tinysynth";
 
 function metaCase(demo) {

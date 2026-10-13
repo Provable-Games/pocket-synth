@@ -1,6 +1,6 @@
 {
-  "name": "webaudio-tinysynth",
-  "version": "2.0.0",
+  "name": "pocket-synth",
+  "version": "2.0.1",
   "description": "WebAudio Tiny GM Synthesizer",
   "main": "webaudio-tinysynth.js",
   "keywords": [
@@ -42,14 +42,14 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Provable-Games/webaudio-tinysynth.git"
+    "url": "git+https://github.com/Provable-Games/pocket-synth.git"
   },
   "author": "Tatsuya Shinyagaito",
   "license": "Apache-2.0",
   "bugs": {
-    "url": "https://github.com/Provable-Games/webaudio-tinysynth/issues"
+    "url": "https://github.com/Provable-Games/pocket-synth/issues"
   },
-  "homepage": "https://github.com/Provable-Games/webaudio-tinysynth#readme",
+  "homepage": "https://github.com/Provable-Games/pocket-synth#readme",
   "devEngines": {
     "runtime": {
       "name": "node",

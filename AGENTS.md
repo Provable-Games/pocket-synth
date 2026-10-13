@@ -29,7 +29,7 @@ Tests build fresh minified output under ignored `.build/`; `node scripts/test-bu
 
 Feature PRs never commit `webaudio-tinysynth.min.js` or its map, and nobody edits them by hand. Integration CI generates them after merges; `main` uses [manual release PRs](README.md#distribution-verification-and-releases). Check locally with `node scripts/check-dist.js --unchanged-from=origin/<base-branch>`; use a fresh ignored build for validation.
 
-Ordinary browser CI has narrowly approved exceptions in `tests/browser/lib/known-failures.js`, tracked in [#96](https://github.com/Provable-Games/webaudio-tinysynth/issues/96) and [#97](https://github.com/Provable-Games/webaudio-tinysynth/issues/97). Local defaults and full-mix qualification stay strict. Preserve original assertions, tolerances and failed first attempts; clean diagnostics do not clear them. Original capture evidence lives outside the repo: do not delete it, relax tests or widen exceptions as routine cleanup.
+Ordinary browser CI has narrowly approved exceptions in `tests/browser/lib/known-failures.js`, tracked in [#96](https://github.com/Provable-Games/pocket-synth/issues/96) and [#97](https://github.com/Provable-Games/pocket-synth/issues/97). Local defaults and full-mix qualification stay strict. Preserve original assertions, tolerances and failed first attempts; clean diagnostics do not clear them. Original capture evidence lives outside the repo: do not delete it, relax tests or widen exceptions as routine cleanup.
 
 ## Documentation and vendored assets
 

@@ -13,7 +13,7 @@ const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 const D = require("../../scripts/check-dist");
 
-const REPO = "Provable-Games/webaudio-tinysynth";
+const REPO = "Provable-Games/pocket-synth";
 const [MIN, MAP] = D.GENERATED;
 
 test.describe("decide()", () => {
