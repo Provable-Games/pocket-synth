@@ -21,6 +21,8 @@ export default [
     // declared, so a misspelled or accidental global still fails no-undef.
     files: ["webaudio-tinysynth.js"],
     languageOptions: {
+      // The library keeps ES2015 syntax; newer syntax fails to parse here.
+      ecmaVersion: 2015,
       sourceType: "script",
       globals: {
         AudioContext: "readonly",
