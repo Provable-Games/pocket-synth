@@ -200,7 +200,30 @@ for (const variant of variants) {
       const before = snapshot(s);
       for (const v of [128, 129, 140, 131.5, 1e9]) expect(thrown(() => s.synth.setProgram(2, v)).message).toMatch(/^program out of range/);
       expect(snapshot(s)).toBe(before);
-      expect(thrown(() => s.synth.setTimbre(0, 130, [{}])).name).toBe("RangeError"); // setTimbre and getTimbreName stay 0-127
+      expect(thrown(() => s.synth.setTimbre(0, 130, [{}])).name).toBe("RangeError"); // setTimbre stays 0-127
+    });
+
+    test("getTimbreName names a program slot above 127 that setProgram accepts (TinyChip, D-031)", () => {
+      const s = synthFor(variant);
+      s.synth.program[130] = { name: "added", p: [{ w: "square" }] };
+      expect([s.synth.getTimbreName(0, 130), s.synth.getTimbreName("0", " 130 ")]).toEqual(["added", "added"]);
+      s.synth.setProgram(0, 130); // the same slots
+    });
+
+    test("getTimbreName rejects a missing slot above 127, or one without a timbre, with a RangeError", () => {
+      const s = synthFor(variant);
+      s.synth.program[140] = { name: "no timbre" };
+      for (const v of [128, 140, 1e9]) {
+        const e = thrown(() => s.synth.getTimbreName(0, v));
+        expect([e.name, e.message]).toEqual(["RangeError", "program out of range: " + v]);
+      }
+      expect(thrown(() => s.synth.getTimbreName(0, 130.5)).name).toBe("RangeError");
+    });
+
+    test("getTimbreName keeps drums at 35-81, even where an added program slot exists", () => {
+      const s = synthFor(variant);
+      s.synth.program[130] = { name: "added", p: [{ w: "square" }] };
+      for (const v of [34, 82, 130]) expect(thrown(() => s.synth.getTimbreName(1, v)).message).toBe("drum out of range: " + v);
     });
 
     test("numeric strings are read with Number() and stored as numbers", () => {

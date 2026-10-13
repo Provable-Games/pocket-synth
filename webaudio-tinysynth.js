@@ -786,7 +786,14 @@ function WebAudioTinySynthCore(target) {
         this.playMIDI();
     },
     getTimbreName:(m,n)=>{
-      return this._slot(m,n).name;
+      /* Programs 0-127 and drums 35-81 (_slot), plus a program slot above 127 a caller added
+         itself, which setProgram() also accepts (TinyChip, D-031): one with a timbre (p). */
+      const v=this._num("m",m,1,1) ? 0 : this._num("program",n,1/0,1);
+      if(v<128)
+        return this._slot(m,n).name;
+      if(!(this.program[v]||0).p)
+        throw new RangeError("program out of range: "+v);
+      return this.program[v].name;
     },
     loadMIDIfromSrc:()=>{
       return this.loadMIDIUrl(this.src);

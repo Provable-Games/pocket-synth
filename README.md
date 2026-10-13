@@ -151,7 +151,8 @@ These functions are available on a `WebAudioTinySynth` instance. Volume, quality
 
 #### getTimbreName(m,n)
 
-> get name of specified timbre. m=0:normal channel voice,n=prog#. or m=1:drum track,n=note#
+> get name of specified timbre. m=0:normal channel voice,n=prog#. or m=1:drum track,n=note#  
+> n is 0–127 for programs and 35–81 for drums; other values throw a `RangeError`. A program slot above 127 that a caller added itself and `setProgram()` accepts (see `setProgram`) is also named.
 
 #### setSampleWave(name, samples)
 
