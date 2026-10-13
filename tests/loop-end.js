@@ -97,7 +97,7 @@ function notesPerPass(source, bytes) {
 /* Play looped; `setup(synth)` runs before playMIDI. Stops after `maxMs` or when `until(notes)` is true. */
 function playLooped(source, label, bytes, setup, maxMs, until) {
   const r = H.createSynth(source, label);
-  r.synth.loadMIDI(H.toArrayBuffer(bytes));
+  H.loadAsUpstream(r, H.toArrayBuffer(bytes)); // without the fork's stopMIDI() cleanup
   r.synth.setLoop(1);
   setup(r.synth);
   r.synth.playMIDI();

@@ -26,8 +26,8 @@ const TAIL_MS = 15000;       // keep the clock running after the song ends
 const MAX_MS = 60 * 60 * 1000;
 
 function run(source, label, midiBytes) {
-  const { synth, env, trace, notes } = H.createSynth(source, label);
-  synth.loadMIDI(H.toArrayBuffer(midiBytes));
+  const r = H.createSynth(source, label), { synth, env, trace, notes } = r;
+  H.loadAsUpstream(r, H.toArrayBuffer(midiBytes)); // without the fork's stopMIDI() cleanup
   synth.setLoop(0);
   synth.playMIDI();
   const st = synth.getPlayStatus();
@@ -55,6 +55,15 @@ function firstDiff(a, b) {
 const upstreamName = "upstream@" + H.UPSTREAM_COMMIT.slice(0, 7);
 const rawUpstream = { name: upstreamName, source: H.upstreamSource() };
 const variants = [{ name: upstreamName + "+patches", source: H.referenceSource() }].concat(H.forkVariants());
+
+/* Fixtures present at the T0 baseline. Each must still exist; new .mid files in test-midi/ are compared too. */
+const REQUIRED_FIXTURES = [
+  "ws.mid", "test-midi/all-gm-sounds.mid", "test-midi/test-gs-scale-tuning.mid", "test-midi/test-rpn-coarse-tuning.mid",
+  "test-midi/test-rpn-fine-tuning.mid", "test-midi/test-rpn-pitch-bend-range.mid",
+  "test-midi/test-sysex-master-coarse-tuning.mid", "test-midi/test-sysex-master-fine-tuning.mid",
+];
+const missingFixtures = REQUIRED_FIXTURES.filter((f) => !fs.existsSync(path.join(H.ROOT, f)));
+if (missingFixtures.length) H.fail("missing MIDI fixture(s): " + missingFixtures.join(", "));
 
 const midiFiles = ["ws.mid"].concat(
   fs.readdirSync(path.join(H.ROOT, "test-midi")).filter((f) => /\.midi?$/i.test(f)).sort().map((f) => "test-midi/" + f));
