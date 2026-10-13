@@ -423,7 +423,11 @@ node scripts/reanalyze-fullmix-v6.js \
   --input=<evidence>/full-mix-qualification-firefox/browser-matrix \
   --input=<evidence>/full-mix-qualification-webkit/browser-matrix \
   --out=<evidence>/reanalysis.json --reference-out=tests/browser/specs/full-mix-reference.json
-# Commit the reference, then dispatch the qualification again; its aggregate must pass.
+# Commit the reference, then dispatch the qualification again: every full-mix case must
+# pass its "first attempt agrees with measured engine/build song and probe reference"
+# checks. The aggregate also runs the strict render spec. That spec stays red until GM
+# render headroom (#66) is fixed, and intermittent WebKit first-attempt failures
+# (#96, #97) can also fail it.
 ```
 
 The exporter requires the three reports to come from one run, attempt, commit, configuration and toolchain, and exports only clean first attempts. A case whose first attempt failed stays in `coverage.incompleteCases` with its measured reason, which keeps the lane failing; [tests/node/full-mix-reference.test.cjs](tests/node/full-mix-reference.test.cjs) lists the documented incomplete cases. Never re-run a capture run (`gh run rerun` replaces the earlier attempt's artifacts) and never promote a diagnostic repeat; dispatch a new run instead.
