@@ -221,6 +221,30 @@ describe.each(variants)("$name: short notes (#59)", (variant) => {
       expect(releaseProblems(note, s.synth.program[0].p, 1, 1.07)).toEqual([]);
     });
 
+    test("a timed All Sound Off during the attack: the attack runs on to the cut, then the gain is 0", () => {
+      const s = setup(op());
+      const from = s.trace.length;
+      s.synth.noteOn(0, 60, 100, 1);
+      const id = gainsOf(parse(s.trace, from))[0];
+      s.synth.send([0xb0, 120, 0], 1.05);
+      const g = curve(s, from, id);
+      expect(valueAt(g, 1.025)).toBeCloseTo(level * 0.025 / 0.2, 12);
+      expect([valueAt(g, 1.05), valueAt(g, 2)]).toEqual([0, 0]);
+    });
+
+    test("a release timed before a cut sent ahead keeps the cut", () => {
+      const s = setup(op());
+      const from = s.trace.length;
+      s.synth.noteOn(0, 60, 100, 1);
+      const id = gainsOf(parse(s.trace, from))[0];
+      s.synth.send([0xb0, 120, 0], 1.1);
+      s.synth.noteOff(0, 60, 1.05);
+      const g = curve(s, from, id);
+      expect(valueAt(g, 1.05)).toBeCloseTo(level * 0.05 / 0.2, 12);
+      expect(valueAt(g, 1.08)).toBeGreaterThan(0);
+      expect([valueAt(g, 1.1), valueAt(g, 2)]).toEqual([0, 0]);
+    });
+
     test("a = 0: as upstream, nothing is set unless the note-off is at the note-on time, where the level is set again", () => {
       const s = setup(op({ a: 0 }));
       const late = playNote(s, 0, 60, 1, 1.07);
