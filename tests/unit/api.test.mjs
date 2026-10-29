@@ -940,5 +940,60 @@ for (const variant of variants) {
       expect([s.synth.getAudioContext() !== null, tick(s)]).toEqual([true, 1920]);
     });
   });
+
+  describe(variant.name + ": phone playback (larger output buffer, longer lookahead)", () => {
+    /* A synth on a fresh environment; `setup(sandbox)` runs before the library is loaded. With
+       cjs, the library is loaded as Node's require() does: `this` is module.exports. */
+    function build(setup, cjs) {
+      const env = H.createEnvironment([]);
+      if (setup) setup(env.sandbox);
+      if (!cjs) {
+        vm.runInContext(variant.source, env.sandbox, { filename: variant.name });
+        return new env.sandbox.WebAudioTinySynth();
+      }
+      const m = { exports: {} };
+      vm.runInContext("(function(module,exports){" + variant.source + "\n})", env.sandbox, { filename: variant.name }).call(m.exports, m, m.exports);
+      return new m.exports();
+    }
+    const media = (matches) => (sandbox) => { sandbox.matchMedia = (q) => ({ media: q, matches: q === "(pointer: coarse)" && matches }); };
+    const recordContexts = (made, setup) => (sandbox) => {
+      if (setup) setup(sandbox);
+      const Base = sandbox.AudioContext;
+      sandbox.AudioContext = class extends Base { constructor(...args) { super(); made.push(args); } };
+    };
+
+    test("on a coarse pointer, the synth's own context asks for the playback latency hint; elsewhere a default context", () => {
+      const touch = [], desk = [], none = [];
+      build(recordContexts(touch, media(true)));
+      build(recordContexts(desk, media(false)));
+      build(recordContexts(none));
+      expect([touch, desk, none]).toEqual([[[{ latencyHint: "playback" }]], [[]], [[]]]);
+    });
+
+    test("an engine that rejects context options gets a default context", () => {
+      const made = [];
+      const s = build((sandbox) => {
+        media(true)(sandbox);
+        const Base = sandbox.AudioContext;
+        sandbox.AudioContext = class extends Base { constructor(...args) { if (args.length) throw new TypeError("no options"); super(); made.push(args); } };
+      });
+      expect(made).toEqual([[]]);
+      expect(s.getAudioContext()).not.toBe(null);
+    });
+
+    test("loaded through CommonJS, a coarse pointer is still detected (window there is module.exports)", () => {
+      const made = [];
+      expect(build(recordContexts(made, media(true)), true).preroll).toBe(1);
+      expect(build(media(false), true).preroll).toBe(0.2);
+      expect(made).toEqual([[{ latencyHint: "playback" }]]);
+    });
+
+    test("the lookahead is 0.2 s, and 1 s on a coarse pointer (a phone or tablet)", () => {
+      expect(build().preroll).toBe(0.2);
+      expect(build(media(false)).preroll).toBe(0.2);
+      expect(build(media(true)).preroll).toBe(1);
+      expect(build((sandbox) => { sandbox.matchMedia = () => { throw new Error("no media queries"); }; }).preroll).toBe(0.2);
+    });
+  });
 }
 

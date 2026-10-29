@@ -511,7 +511,15 @@ function WebAudioTinySynthCore(target) {
         this.rhythm[i]=0;
       }
       this.rhythm[9]=1;
+      /* Touch devices get a 1 s lookahead and a larger output buffer (_create): their main thread
+         can stall past 0.2 s, and late notes pop. matchMedia is the global, as AudioContext is:
+         under CommonJS, window is module.exports. */
       this.preroll=0.2;
+      this._touch=0;
+      try{
+        if(typeof matchMedia=="function" && matchMedia("(pointer: coarse)").matches)
+          this.preroll=this._touch=1;
+      }catch(e){ /* no media queries: keep 0.2 s */ }
       this.relcnt=0;
       /* Lifecycle (#11, #12): the installed context, whether the synth created it (_own), the
          one-shot sources (percussion hits and playMIDI's start-up oscillator, kept until they
@@ -551,8 +559,14 @@ function WebAudioTinySynthCore(target) {
                 this.song.tempo=e.m[1];
                 this.tick2Time=4*60/this.song.tempo/this.song.timebase;
               }
-              else
-                this.send(e.m,this.playTime);
+              else{
+                try{
+                  this._seq=1; // the voice limit times the voices queued here (_limitVoices)
+                  this.send(e.m,this.playTime);
+                }finally{
+                  this._seq=0;
+                }
+              }
               ++this.playIndex;
               if(this.playIndex>=this.song.ev.length){
                 /* Wrap only if the next pass advances (#8). Without a positive loopEnd,
@@ -606,7 +620,13 @@ function WebAudioTinySynthCore(target) {
          its graph was installed is torn down and released (_drop), so the synth is left without a
          context, nothing stays open or referenced, and the error propagates; the next use retries. */
       window.AudioContext = window.AudioContext || window.webkitAudioContext;
-      const c=new AudioContext();
+      /* On a touch device (init), a larger output buffer than the default: a phone underruns
+         (clicks) on the smallest one. Elsewhere the default keeps live playing responsive. */
+      let c;
+      try{
+        c=this._touch && new AudioContext({latencyHint:"playback"});
+      }catch(e){ /* an engine that rejects context options: a default context */ }
+      c=c||new AudioContext();
       try{
         this.setAudioContext(c);
       }catch(e){
@@ -1208,19 +1228,65 @@ function WebAudioTinySynthCore(target) {
       nt.l=nt.o.length;
       this._gone.add(nt);
     },
-    _limitVoices:(ch,n)=>{ // eslint-disable-line no-unused-vars -- callers pass the new note; the limit is global
-      this.notetab.sort(function(n1,n2){
+    _limitVoices:(ch,n,t)=>{ // eslint-disable-line no-unused-vars -- callers pass the new note; the limit is global
+      /* Ended voices go, then the limit holds in upstream's order. Offline every scheduled voice
+         counts and those over the limit stop now, as upstream, and so does a voice a caller sends
+         with a future time (up). For a voice the sequencer queues (_seq) or one sent for now, the
+         limit holds at its onset u: the voices sounding then count (k: the rank of the voice at
+         i), and those over the limit stop then: now, as upstream (also a queued voice whose own onset
+         is u, which would never sound), or at u, cut ahead (_cut). The
+         sequencer queues in time order, so its voices are never cut before their time and stay
+         within the limit once they start. A live voice held into a later queued onset is counted
+         at the next onset queued after it starts, not before (its end is not known yet). A
+         caller's queued voices count at once, as upstream, so the queue stays bounded by the
+         lookahead and the limit. */
+      const c=this.actx.currentTime,a=this.notetab,up=this._off || t>c && !this._seq,u=up ? c : Math.max(t,c),
+        on=(nt)=>up || nt.t<=u && u<=nt.e && !(nt.x<=u);
+      a.sort(function(n1,n2){
         if(n1.f!=n2.f) return n1.f-n2.f;
         if(n1.e!=n2.e) return n2.e-n1.e;
         return n2.t-n1.t;
       });
-      for(let i=this.notetab.length-1;i>=0;--i){
-        var nt=this.notetab[i];
-        if(this.actx.currentTime>nt.e || i>=(this.voices-1)){
-          this._pruneNote(nt);
-          this.notetab.splice(i,1);
+      for(let i=a.length-1;i>=0;--i){
+        if(c>a[i].e){
+          this._pruneNote(a[i]);
+          a.splice(i,1);
         }
       }
+      let k=a.filter(on).length;
+      for(let i=a.length-1;i>=0;--i){
+        var nt=a[i];
+        if(!on(nt))
+          continue;
+        if(k>=this.voices){
+          if(u>c && nt.t<u) // a voice over the limit at its own onset never sounds: it goes now
+            this._cut(nt,u);
+          else{
+            this._pruneNote(nt);
+            a.splice(i,1);
+          }
+        }
+        --k;
+      }
+    },
+    _cut:(nt,t)=>{
+      /* Silence a voice at t, a future time (a steal at a later onset, or a timed All Sound Off):
+         its gain drops to 0 and it ends (e) then, so the limit stops counting it, and it is pruned
+         once the clock passes t. It stays in notetab until then, so it counts and can be released
+         before t; a release keeps the cut (x, _releaseNote). An operator still in its attack at t
+         ramps on to its level then, as in _releaseNote: cancelScheduledValues(t) alone would
+         remove the whole ramp and silence it from its onset. The earliest cut holds. */
+      if(nt.x<=t)
+        return;
+      nt.x=t;
+      nt.e=Math.min(nt.e,t);
+      nt.g.forEach((g,k)=>{
+        const p=g.gain,e=nt.t2[k];
+        p.cancelScheduledValues(t);
+        if(nt.t<t && t<=e)
+          p.linearRampToValueAtTime(nt.v[k]*(t-nt.t)/(e-nt.t),t);
+        p.setValueAtTime(0,t);
+      });
     },
     _filter:(pn,f,out)=>{
       /* An audio-output operator's fixed filter (#27), connected to out and
@@ -1263,7 +1329,7 @@ function WebAudioTinySynthCore(target) {
         if(![fp[i]/b[i],fp[i]/b[i]*pn.p,vp[i],pn.s*vp[i]].every(f32))
           return;
       }
-      this._limitVoices(ch,n);
+      this._limitVoices(ch,n,t);
       const q=[]; // the output operators' filters, by operator (#27)
       for(let i=0;i<p.length;++i){
         pn=p[i];
@@ -1338,7 +1404,7 @@ function WebAudioTinySynthCore(target) {
         p.setValueAtTime(v,t);
     },
     _releaseNote:(nt,t)=>{
-      if(nt.ch!=9){
+      if(nt.ch!=9 && !(nt.x<=t)){ // a voice cut ahead (x, _cut) is silent from then
         for(let k=nt.g.length-1;k>=0;--k){
           /* An operator whose attack (ending at e) has not ended at t (#59) ramps on to its
              own level at t, v*(t-nt.t)/a, and is released from there. With a = 0 (e is the
@@ -1356,9 +1422,11 @@ function WebAudioTinySynthCore(target) {
             nt.t2[k]=t;
           }
           this._setParamTarget(g,0,t,nt.r[k]);
+          if(nt.x)
+            g.setValueAtTime(0,nt.x);
         }
       }
-      nt.e=t+nt.r[0]*this.releaseRatio;
+      nt.e=Math.min(t+nt.r[0]*this.releaseRatio,nt.x||1/0);
       nt.f=1;
     },
     setModulation:(ch,v,t)=>{
@@ -1570,10 +1638,33 @@ function WebAudioTinySynthCore(target) {
           break;
         case 120:  /* all sound off */
         case 123:  /* all notes off */
-        case 124: case 125: case 126: case 127: /* omni off/on mono/poly */
-          this.allSoundOff(ch);
+        case 124: case 125: case 126: case 127: { /* omni off/on mono/poly */
+          /* Sent ahead (the sequencer's lookahead, or a caller's future time): the channel's
+             voices that start by then stop at that time (120), or get a note-off then, as from
+             noteOff(): held by the sustain pedal until it is released; later ones are kept.
+             Otherwise every voice of the channel stops now, as upstream. */
+          const u=this._tsConv(t);
+          if(u>this.actx.currentTime){
+            for(const nt of this.notetab){
+              if(nt.ch!=ch || u<nt.s)
+                continue;
+              if(msg[1]==120)
+                this._cut(nt,u);
+              else if(nt.f==0){
+                nt.f=1;
+                if(this.sustain[ch]<64)
+                  this._releaseNote(nt,Math.max(u,nt.t));
+              }
+            }
+          }
+          else
+            this.allSoundOff(ch);
           break;
-        case 121: this.resetAllControllers(ch); break;
+        }
+        case 121: /* reset all controllers: the pedal comes up at t, releasing the voices it held */
+          this.setSustain(ch,0,t);
+          this.resetAllControllers(ch);
+          break;
         }
         break;
       case 0xc0: this.setProgram(ch,msg[1]); break;

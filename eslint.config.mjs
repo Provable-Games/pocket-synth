@@ -29,6 +29,7 @@ export default [
         XMLHttpRequest: "readonly",
         clearInterval: "readonly",
         console: "readonly",
+        matchMedia: "readonly",
         performance: "readonly",
         setInterval: "readonly",
         define: "readonly",
