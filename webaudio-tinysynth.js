@@ -1225,11 +1225,14 @@ function WebAudioTinySynthCore(target) {
     _limitVoices:(ch,n,t)=>{ // eslint-disable-line no-unused-vars -- callers pass the new note; the limit is global
       /* Ended voices go, then the limit holds in upstream's order. Offline every scheduled voice
          counts and those over the limit stop now, as upstream. On a realtime context it holds at
-         the new voice's onset t and at each later onset already queued: the voices sounding at
-         that time u count (k: the rank of the voice at i), and those over the limit stop then:
-         now, as upstream, or at u, cut ahead (_cut). So no voice is cut before its time, and
-         queued voices stay within the limit once they start. */
-      const c=this.actx.currentTime,a=this.notetab,u0=Math.max(t,c);
+         the new voice's onset t and at each later onset queued within the lookahead (near, up
+         to now + preroll): the voices sounding at that time u count (k: the rank of the voice at
+         i), and those over the limit stop then: now, as upstream, or at u, cut ahead (_cut). So
+         the sequencer's queued voices are never cut before their time and stay within the limit
+         once they start. A voice due further ahead (a caller's time) counts at once and stops
+         now, and a new voice due further ahead applies the limit as upstream (up), which keeps
+         notetab, and so this work, bounded. */
+      const c=this.actx.currentTime,a=this.notetab,u0=Math.max(t,c),near=(nt)=>nt.t<=c+this.preroll,up=this._off || t>c+this.preroll;
       a.sort(function(n1,n2){
         if(n1.f!=n2.f) return n1.f-n2.f;
         if(n1.e!=n2.e) return n2.e-n1.e;
@@ -1241,16 +1244,16 @@ function WebAudioTinySynthCore(target) {
           a.splice(i,1);
         }
       }
-      const at=this._off ? [c] : [...new Set([u0].concat(a.map(nt=>nt.t).filter(x=>x>u0)))].sort((x,y)=>x-y);
+      const at=up ? [c] : [...new Set([u0].concat(a.filter(near).map(nt=>nt.t).filter(x=>x>u0)))].sort((x,y)=>x-y);
       for(const u of at){
-        const on=(nt)=>this._off || nt.t<=u && u<=nt.e && !(nt.x<=u);
+        const on=(nt)=>up || !near(nt) || nt.t<=u && u<=nt.e && !(nt.x<=u);
         let k=a.filter(on).length;
         for(let i=a.length-1;i>=0;--i){
           var nt=a[i];
           if(!on(nt))
             continue;
           if(k>=this.voices){
-            if(u>c)
+            if(!up && u>c && near(nt))
               this._cut(nt,u);
             else{
               this._pruneNote(nt);

@@ -113,20 +113,36 @@ describe.each(variants)("$name: a 1 s lookahead (touch devices)", (variant) => {
     expect(pruned.filter((p) => p.live)).toEqual([]);
   });
 
-  test("a caller's notes queued at one time are held to the limit when they start", () => {
+  test("a caller's notes queued within the lookahead at one time are held to the limit when they start", () => {
     const { synth, env } = synthFor(variant, { voices: 3 });
-    for (let n = 60; n < 72; ++n) synth.noteOn(0, n, 100, 1);
-    expect(sounding(synth, 1)).toBe(3);
-    H.runUntil(env, () => false, 1500);
-    expect([sounding(synth, 1.5), synth.notetab.length]).toEqual([3, 3]);
+    synth.preroll = 1;
+    for (let n = 60; n < 72; ++n) synth.noteOn(0, n, 100, 0.5);
+    expect([sounding(synth, 0.5), synth.notetab.filter((nt) => nt.t > 0).length]).toEqual([3, 12]); // 9 cut at 0.5, not before
+    H.runUntil(env, () => false, 1000);
+    expect([sounding(synth, 1), synth.notetab.length]).toEqual([3, 3]);
   });
 
   test("started voices are held to the limit now, and with the queued ones once those start", () => {
     const { synth } = synthFor(variant, { voices: 3 });
-    for (let n = 60; n < 63; ++n) synth.noteOn(0, n, 100, 5); // queued for 5 s
+    synth.preroll = 1;
+    for (let n = 60; n < 63; ++n) synth.noteOn(0, n, 100, 0.5); // queued for 0.5 s
     for (let n = 70; n < 75; ++n) synth.noteOn(0, n, 100); // sounding now
-    expect([sounding(synth, 0), sounding(synth, 5)]).toEqual([3, 3]);
+    expect([sounding(synth, 0), sounding(synth, 0.5)]).toEqual([3, 3]);
     expect(synth.notetab.filter((nt) => nt.t > 0).map((nt) => nt.n).sort()).toEqual([60, 61, 62]); // the later onsets win, as upstream
+  });
+
+  test("voices a caller schedules beyond the lookahead count at once, as upstream, so the voice table stays bounded", () => {
+    // 4000 notes 0.05 s apart from 1 s on, sent track by track (every other note, then the rest).
+    const { synth } = synthFor(variant, { quality: 0 });
+    synth.preroll = 1;
+    let most = 0;
+    for (let j = 0; j < 4000; ++j) {
+      const i = (j % 2) * 2000 + (j >> 1), t = 1 + i * 0.05;
+      synth.noteOn(0, 40 + (i % 40), 100, t);
+      synth.noteOff(0, 40 + (i % 40), t + 0.1);
+      most = Math.max(most, synth.notetab.length);
+    }
+    expect(most).toBeLessThanOrEqual(64);
   });
 
   test("an All Notes Off sent ahead releases the channel at its own time, not when it is sent", () => {
