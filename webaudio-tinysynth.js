@@ -1639,14 +1639,22 @@ function WebAudioTinySynthCore(target) {
         case 123:  /* all notes off */
         case 124: case 125: case 126: case 127: { /* omni off/on mono/poly */
           /* Sent ahead (the sequencer's lookahead, or a caller's future time): the channel's
-             voices that start by then stop at that time (120), or are released then, as by
-             note-offs; later ones are kept. Otherwise every voice of the channel stops now, as
-             upstream. */
+             voices that start by then stop at that time (120), or get a note-off then, as from
+             noteOff(): held by the sustain pedal until it is released; later ones are kept.
+             Otherwise every voice of the channel stops now, as upstream. */
           const u=this._tsConv(t);
           if(u>this.actx.currentTime){
-            for(const nt of this.notetab.slice())
-              if(nt.ch==ch && u>=nt.s)
-                msg[1]==120 ? this._cut(nt,u) : this._releaseNote(nt,Math.max(u,nt.t));
+            for(const nt of this.notetab){
+              if(nt.ch!=ch || u<nt.s)
+                continue;
+              if(msg[1]==120)
+                this._cut(nt,u);
+              else if(nt.f==0){
+                nt.f=1;
+                if(this.sustain[ch]<64)
+                  this._releaseNote(nt,Math.max(u,nt.t));
+              }
+            }
           }
           else
             this.allSoundOff(ch);

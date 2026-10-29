@@ -160,8 +160,19 @@ describe.each(variants)("$name: a 1 s lookahead (touch devices)", (variant) => {
     ]);
     const start = released[0].t - 0.4;
     expect(pruned.filter((p) => p.live)).toEqual([]);
-    expect(released.map((r) => r.t - start)).toEqual([0.4, 0.5, 0.5].map((x) => expect.closeTo(x, 9)));
+    expect(released.map((r) => r.t - start)).toEqual([0.4, 0.5].map((x) => expect.closeTo(x, 9))); // the released note is not released again
     expect(released.every((r) => r.at < r.t)).toBe(true); // sent ahead, within the lookahead
+    expect(s.synth.notetab).toEqual([]);
+  });
+
+  test("an All Notes Off sent ahead leaves a sustained note to the pedal, as a note-off does", () => {
+    // Note-on at 0, pedal down at 0.1 s, CC123 at 0.2 s, pedal up at 2 s.
+    const { s, released } = play([
+      H.midi.noteOn(0, 0, 60, 100), { tick: 96, bytes: [0xb0, 64, 127] },
+      { tick: 192, bytes: [0xb0, 123, 0] }, { tick: 1920, bytes: [0xb0, 64, 0] },
+    ]);
+    const start = s.notes.find(([, ch, n]) => ch === 0 && n === 60)[0];
+    expect(released.map((r) => r.t - start)).toEqual([expect.closeTo(2, 9)]);
     expect(s.synth.notetab).toEqual([]);
   });
 

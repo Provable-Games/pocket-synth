@@ -329,7 +329,7 @@ Almost function has the timestamp, `t` parameter. That specify accurate timing o
 |**Channel Mode Message**|          |                                |
 |**120**                 | Yes      | all sound off. Sent with a future time, it cuts the voices that start by then at that time and keeps later ones; otherwise it stops them at once, as `allSoundOff()` |
 |**121**                 | Yes      | reset all controller           |
-|**123**                 | Yes      | all note off. Sent with a future time, as the sequencer does, it releases the voices that start by then at that time; otherwise it stops them at once, as `allSoundOff()` (also 124–127) |
+|**123**                 | Yes      | all note off. Sent with a future time, as the sequencer does, it gives the voices that start by then a note-off at that time (the sustain pedal holds them, as for any note-off); otherwise it stops them at once, as `allSoundOff()` (also 124–127) |
 |------------------------|----------|--------------------------------|
 |**RPN**                 |          |                                |
 |**0**                   | Yes      | Bend Range                     |
