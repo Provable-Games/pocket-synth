@@ -362,6 +362,9 @@ describe.each(variants)("$name: short notes (#59)", (variant) => {
     test.each([0, 1])("quality %i: every built-in program, released after its longest attack", (quality) => {
       const run = (v) => {
         const s = synthFor(v, { quality });
+        /* A voice for each of the 256 notes, all queued ahead, and init's own note: the fork
+           never steals a voice before it starts, where upstream would cut all but the latest 63. */
+        s.synth.setVoices(257);
         const maxA = Math.max(...s.synth.program.flatMap((x) => x.p.map((o) => o.a)));
         const from = s.trace.length;
         let t = 1;

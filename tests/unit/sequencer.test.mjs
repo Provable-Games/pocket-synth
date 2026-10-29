@@ -60,3 +60,56 @@ describe.each(variants)("$name: MIDI file playback", (variant) => {
     expect(sources(s.trace, from).map((src) => src.type)).toEqual(["square", "square", "sine"]);
   });
 });
+
+describe.each(variants)("$name: a 1 s lookahead (touch devices)", (variant) => {
+  /* Play `events` with preroll 1, recording each voice pruned: whether it had started, and
+     whether it was still sounding (not ended and the song still playing). */
+  function play(events) {
+    const s = synthFor(variant);
+    s.synth.preroll = 1;
+    const pruned = [], prune = s.synth._pruneNote, now = () => s.env.clock.ms / 1000;
+    s.synth._pruneNote = (nt) => { pruned.push({ started: nt.t <= now(), live: nt.e >= now() && s.synth.playing === 1 }); return prune(nt); };
+    const released = [], release = s.synth._releaseNote;
+    s.synth._releaseNote = (nt, t) => { released.push({ at: now(), t }); return release(nt, t); };
+    let queued = 0;
+    const step = s.env.step;
+    s.env.step = () => { step(); queued = Math.max(queued, s.synth.notetab.length); };
+    playToEnd(s, H.makeMidi(PPQ, events));
+    return { s, pruned, released, queued };
+  }
+
+  test("voices queued ahead are neither stolen before they start nor counted against the limit", () => {
+    // 8-note chords every 0.1 s (96 ticks at 120 BPM), each released after 0.05 s: about 80
+    // voices queued ahead, more than the 64-voice limit, while far fewer sound at once.
+    const events = [];
+    for (let i = 0; i < 40; ++i)
+      for (let k = 0; k < 8; ++k)
+        events.push(H.midi.noteOn(i * 96, 0, 48 + k * 3, 100), H.midi.noteOff(i * 96 + 48, 0, 48 + k * 3));
+    const { s, pruned, queued } = play(events);
+    expect(s.synth.voices).toBe(64);
+    expect(queued).toBeGreaterThan(64);
+    expect(pruned.filter((p) => !p.started)).toEqual([]);
+    expect(pruned.filter((p) => p.live)).toEqual([]);
+  });
+
+  test("started voices are still held to the limit while queued ones wait", () => {
+    const { synth } = synthFor(variant, { voices: 3 });
+    for (let n = 60; n < 63; ++n) synth.noteOn(0, n, 100, 5); // queued for 5 s
+    for (let n = 70; n < 75; ++n) synth.noteOn(0, n, 100); // sounding now
+    expect(synth.notetab.filter((nt) => nt.t <= 0)).toHaveLength(3);
+    expect(synth.notetab.filter((nt) => nt.t > 0).map((nt) => nt.n).sort()).toEqual([60, 61, 62]);
+  });
+
+  test("an All Notes Off sent ahead releases the channel at its own time, not when it is sent", () => {
+    // Note-off at 0.4 s, CC123 at 0.5 s (tick 480), and a note held into the CC123 on channel 1.
+    const { s, pruned, released } = play([
+      H.midi.noteOn(0, 0, 60, 100), H.midi.noteOff(384, 0, 60),
+      H.midi.noteOn(0, 1, 64, 100), { tick: 480, bytes: [0xb0, 123, 0] }, { tick: 480, bytes: [0xb1, 123, 0] },
+    ]);
+    const start = released[0].t - 0.4;
+    expect(pruned.filter((p) => p.live)).toEqual([]);
+    expect(released.map((r) => r.t - start)).toEqual([0.4, 0.5, 0.5].map((x) => expect.closeTo(x, 9)));
+    expect(released.every((r) => r.at < r.t)).toBe(true); // sent ahead, within the lookahead
+    expect(s.synth.notetab).toEqual([]);
+  });
+});

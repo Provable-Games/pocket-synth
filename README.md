@@ -61,14 +61,14 @@ Settings are changed with the functions below (`setMasterVol()`, `setReverbLev()
 |**loop**           | 0        | loop playMIDI            |
 |**loopEnd**        | 0        | loop length in MIDI ticks; 0 = loop on the last event (see `setLoopEnd()`) |
 |**tsmode**         | 0        | default timestamp mode   |
-|**voices**         | 64       | Max number of simultaneous voices. Large number needs more CPU. |
+|**voices**         | 64       | Max number of simultaneous voices. Large number needs more CPU. On a realtime context only started voices count: voices scheduled ahead are not stolen before they start. |
 |**seed**           | 0        | seed of the reverb and noise buffers (constructor option, read-only) |
 |**bufferVersion**  | 1        | version of the buffer generation (read-only). A library change that alters the generated buffers increments it. |
 
 * Assigning `masterVol`, `reverbLev` or `quality` directly does not apply the change; call `setMasterVol()`, `setReverbLev()` or `setQuality()`.
 * The constructor creates an AudioContext unless `lazy: true` or `context` is supplied. Use `setAudioContext()` to switch contexts.
-* A context the synth creates asks for `latencyHint: "playback"` (a default context where options are rejected); a context you supply keeps its own.
-* The realtime sequencer schedules `preroll` seconds ahead: 0.2 s, or 1 s on a coarse pointer (phones and tablets). Stop, seek and song replacement still act at once.
+* On a coarse pointer (phones and tablets), a context the synth creates asks for `latencyHint: "playback"` (a default context where options are rejected); elsewhere it is a default context. A context you supply keeps its own.
+* The realtime sequencer schedules `preroll` seconds ahead: 0.2 s, or 1 s on a coarse pointer. Stop, seek and song replacement still silence everything at once. A song stopped and played again resumes after the notes it had scheduled, so up to `preroll` of music is skipped (see `stopMIDI()`), and `getPlayStatus().play` turns 0 up to `preroll` before the last event sounds.
 * The synth is ready as soon as the constructor returns (`isReady` is 1). `ready()` is kept for compatibility: it returns a `Promise` that resolves once the synth is initialized.
 * `n1` (the metallic noise of cymbals and hi-hats) is generated once per context installation, when it is first needed: by `playMIDI()` (before it reads the clock), by `prewarm()`, or by the first note that plays it. Until then the install does not pay for it, and disposing or replacing the context first never generates it.
 * The buffers are generated with mulberry32. The seed is first mixed with murmur3's `fmix32`, then each buffer gets its own stream, starting at `fmix32(seed) + k·2^30` (k = 0 reverb, 1 `n0`, 2 `n1`). So changing or skipping one buffer never changes another.
@@ -214,7 +214,7 @@ These functions are available on a `WebAudioTinySynth` instance. Volume, quality
 
 #### stopMIDI()
 
-> stop playing MIDI data. Every sounding or scheduled note and drum hit stops, and channel volume, pan and modulation changes scheduled for later are cancelled, so nothing changes after the stop. When `playMIDI()` resumes, it first gives every channel its latest volume, expression, pan and modulation: the values the song had set up to the resume position (including changes it had sent ahead of the stop) and your own, including a change you had scheduled for later with a time. Notes that were due in the 0.2 s after the stop are not replayed, as upstream.
+> stop playing MIDI data. Every sounding or scheduled note and drum hit stops, and channel volume, pan and modulation changes scheduled for later are cancelled, so nothing changes after the stop. When `playMIDI()` resumes, it first gives every channel its latest volume, expression, pan and modulation: the values the song had set up to the resume position (including changes it had sent ahead of the stop) and your own, including a change you had scheduled for later with a time. Notes that were due in the `preroll` after the stop (0.2 s, 1 s on touch devices) are not replayed, as upstream.
 
 #### locateMIDI(tick)
 
@@ -223,7 +223,7 @@ These functions are available on a `WebAudioTinySynth` instance. Volume, quality
 #### getPlayStatus()
 
 > get current MIDI sequence play status.
-> return value is a object `{play:playstatus, maxTick:maxtick, curTick:currenttick, startTime:time}`. `startTime` is new in this fork.
+> return value is a object `{play:playstatus, maxTick:maxtick, curTick:currenttick, startTime:time}`. `startTime` is new in this fork. `play` turns 0, and `curTick` reaches `maxTick`, once the last event is scheduled: up to `preroll` before it sounds, while the song's end is still playing.
 > `startTime` is the AudioContext time at which tick 0 of the current pass sounds, or `null` when not playing. With `loopEnd` set, an event at tick T of any pass sounds at `startTime` plus the time from tick 0 to T under the song's tempo map (120 BPM until its first tempo event). With `loopEnd` unset this holds only in the first pass: a later pass keeps the tempo the previous one ended on until its first tempo event (as upstream), so `startTime` is extrapolated at that tempo. Use `loopEnd` for exact sync. With `loopEnd` set and play from tick 0, tick 0 sounds 0.1 s after `playMIDI()`. Otherwise (`loopEnd` unset, after a seek or a resume) the next event plays 0.1 s after `playMIDI()`, and `startTime` is when tick 0 would have sounded, which can be in the past. Like `curTick`, it moves to the next pass when the sequencer reaches the end of the current one, up to `preroll` (0.2 s, 1 s on touch devices) before the last event sounds and before any rest up to `loopEnd`, so it can be later than `currentTime`: while it is, the previous pass is still sounding.
 > To start visuals with the music: `const st = synth.getPlayStatus().startTime; setTimeout(start, (st - ctx.currentTime + (ctx.outputLatency || 0)) * 1000);`
 
@@ -327,9 +327,9 @@ Almost function has the timestamp, `t` parameter. That specify accurate timing o
 |**100/101**             | Yes      | RPN Index                      |
 |------------------------|----------|--------------------------------|
 |**Channel Mode Message**|          |                                |
-|**120**                 | Yes      | all sound off                  |
+|**120**                 | Yes      | all sound off (sent with a future time: a release at that time, see 123) |
 |**121**                 | Yes      | reset all controller           |
-|**123**                 | Yes      | all note off                   |
+|**123**                 | Yes      | all note off. Sent with a future time, as the sequencer does, it releases the voices that start by then at that time; otherwise it stops them at once, as `allSoundOff()` (also 124–127) |
 |------------------------|----------|--------------------------------|
 |**RPN**                 |          |                                |
 |**0**                   | Yes      | Bend Range                     |

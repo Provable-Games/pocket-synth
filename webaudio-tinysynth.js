@@ -511,12 +511,15 @@ function WebAudioTinySynthCore(target) {
         this.rhythm[i]=0;
       }
       this.rhythm[9]=1;
-      /* Touch devices get a 1 s lookahead: their main thread can stall past 0.2 s, and late notes pop. */
+      /* Touch devices get a 1 s lookahead and a larger output buffer (_create): their main thread
+         can stall past 0.2 s, and late notes pop. matchMedia is the global, as AudioContext is:
+         under CommonJS, window is module.exports. */
       this.preroll=0.2;
+      this._touch=0;
       try{
-        if(typeof window.matchMedia=="function" && window.matchMedia("(pointer: coarse)").matches)
-          this.preroll=1;
-      }catch(e){ /* no window or media queries: keep 0.2 s */ }
+        if(typeof matchMedia=="function" && matchMedia("(pointer: coarse)").matches)
+          this.preroll=this._touch=1;
+      }catch(e){ /* no media queries: keep 0.2 s */ }
       this.relcnt=0;
       /* Lifecycle (#11, #12): the installed context, whether the synth created it (_own), the
          one-shot sources (percussion hits and playMIDI's start-up oscillator, kept until they
@@ -611,13 +614,13 @@ function WebAudioTinySynthCore(target) {
          its graph was installed is torn down and released (_drop), so the synth is left without a
          context, nothing stays open or referenced, and the error propagates; the next use retries. */
       window.AudioContext = window.AudioContext || window.webkitAudioContext;
-      /* A larger output buffer than the default: a phone underruns (clicks) on the smallest one. */
+      /* On a touch device (init), a larger output buffer than the default: a phone underruns
+         (clicks) on the smallest one. Elsewhere the default keeps live playing responsive. */
       let c;
       try{
-        c=new AudioContext({latencyHint:"playback"});
-      }catch(e){
-        c=new AudioContext();
-      }
+        c=this._touch && new AudioContext({latencyHint:"playback"});
+      }catch(e){ /* an engine that rejects context options: a default context */ }
+      c=c||new AudioContext();
       try{
         this.setAudioContext(c);
       }catch(e){
@@ -1220,6 +1223,11 @@ function WebAudioTinySynthCore(target) {
       this._gone.add(nt);
     },
     _limitVoices:(ch,n)=>{ // eslint-disable-line no-unused-vars -- callers pass the new note; the limit is global
+      /* On a realtime context only started voices count and can be stolen: one the lookahead
+         queued for later keeps its place, so it is never cut before it sounds. k: the started
+         voices up to i, its rank. Offline every scheduled voice counts, as upstream. */
+      const c=this.actx.currentTime,on=(nt)=>this._off || nt.t<=c;
+      let k=this.notetab.filter(on).length;
       this.notetab.sort(function(n1,n2){
         if(n1.f!=n2.f) return n1.f-n2.f;
         if(n1.e!=n2.e) return n2.e-n1.e;
@@ -1227,10 +1235,13 @@ function WebAudioTinySynthCore(target) {
       });
       for(let i=this.notetab.length-1;i>=0;--i){
         var nt=this.notetab[i];
-        if(this.actx.currentTime>nt.e || i>=(this.voices-1)){
+        if(!on(nt))
+          continue;
+        if(c>nt.e || k>=this.voices){
           this._pruneNote(nt);
           this.notetab.splice(i,1);
         }
+        --k;
       }
     },
     _filter:(pn,f,out)=>{
@@ -1581,9 +1592,20 @@ function WebAudioTinySynthCore(target) {
           break;
         case 120:  /* all sound off */
         case 123:  /* all notes off */
-        case 124: case 125: case 126: case 127: /* omni off/on mono/poly */
-          this.allSoundOff(ch);
+        case 124: case 125: case 126: case 127: { /* omni off/on mono/poly */
+          /* Sent ahead (the sequencer's lookahead, or a caller's future time): the channel's
+             voices that start by then are released at that time, as by note-offs, and later ones
+             are kept. Otherwise every voice of the channel stops now, as upstream. */
+          const u=this._tsConv(t);
+          if(u>this.actx.currentTime){
+            for(const nt of this.notetab)
+              if(nt.ch==ch && u>=nt.s)
+                this._releaseNote(nt,Math.max(u,nt.t));
+          }
+          else
+            this.allSoundOff(ch);
           break;
+        }
         case 121: this.resetAllControllers(ch); break;
         }
         break;
