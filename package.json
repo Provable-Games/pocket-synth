@@ -1,6 +1,6 @@
 {
   "name": "pocket-synth",
-  "version": "2.0.1",
+  "version": "2.1.0",
   "description": "WebAudio Tiny GM Synthesizer",
   "main": "webaudio-tinysynth.js",
   "keywords": [
