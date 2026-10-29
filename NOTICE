@@ -26,7 +26,8 @@ Modifications by Provable Games, based on upstream commit
     latencyHint "playback" and the realtime lookahead (preroll) is 1 s.
     The realtime voice limit applies to the sequencer's queued voices
     at their start times, and channel mode messages sent with a future
-    time act at that time (CC120 cuts, CC123-127 release).
+    time act at that time (CC120 cuts, CC123-127 act as note-offs).
+    CC121 also lifts the sustain pedal, releasing the voices it held.
   - Added autoResume (default true) for application-controlled audio
     startup: with false, send() does not resume suspended/interrupted
     contexts and the sequencer waits until its context runs. Explicit

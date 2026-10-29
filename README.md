@@ -61,7 +61,7 @@ Settings are changed with the functions below (`setMasterVol()`, `setReverbLev()
 |**loop**           | 0        | loop playMIDI            |
 |**loopEnd**        | 0        | loop length in MIDI ticks; 0 = loop on the last event (see `setLoopEnd()`) |
 |**tsmode**         | 0        | default timestamp mode   |
-|**voices**         | 64       | Max number of simultaneous voices. Large number needs more CPU. On a realtime context, the limit holds when each voice the sequencer queues ahead (`playMIDI()`) starts: those voices are never stolen before they start, and voices over the limit at a later start are cut at that time. A note played live never cuts a queued voice; it counts from the next voice the sequencer queues after it starts. Notes you send with a future time count at once and can be stolen before they start, as upstream. |
+|**voices**         | 64       | Max number of simultaneous voices. Large number needs more CPU. On a realtime context, the limit holds when each voice the sequencer queues ahead (`playMIDI()`) starts: those voices are never cut before they start, and voices over the limit at a later start are cut at that time. A voice already over the limit at its own start would never sound and is dropped when it is queued, as upstream. A note played live never cuts a queued voice; it counts from the next voice the sequencer queues after it starts. Notes you send with a future time count at once and can be stolen before they start, as upstream. |
 |**seed**           | 0        | seed of the reverb and noise buffers (constructor option, read-only) |
 |**bufferVersion**  | 1        | version of the buffer generation (read-only). A library change that alters the generated buffers increments it. |
 
@@ -328,7 +328,7 @@ Almost function has the timestamp, `t` parameter. That specify accurate timing o
 |------------------------|----------|--------------------------------|
 |**Channel Mode Message**|          |                                |
 |**120**                 | Yes      | all sound off. Sent with a future time, it cuts the voices that start by then at that time and keeps later ones; otherwise it stops them at once, as `allSoundOff()` |
-|**121**                 | Yes      | reset all controller           |
+|**121**                 | Yes      | reset all controller. Also lifts the sustain pedal at the message's time, releasing the voices it held |
 |**123**                 | Yes      | all note off. Sent with a future time, as the sequencer does, it gives the voices that start by then a note-off at that time (the sustain pedal holds them, as for any note-off); otherwise it stops them at once, as `allSoundOff()` (also 124–127) |
 |------------------------|----------|--------------------------------|
 |**RPN**                 |          |                                |

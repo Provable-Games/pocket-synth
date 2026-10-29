@@ -101,16 +101,16 @@ describe.each(variants)("$name: a 1 s lookahead (touch devices)", (variant) => {
     expect(pruned.filter((p) => p.live)).toEqual([]);
   });
 
-  test("a chord queued ahead that exceeds the limit is held to it from its onset", () => {
-    // 96 notes at once, held for 0.5 s: 32 of them are cut at the onset, none before it.
+  test("a chord queued ahead that exceeds the limit is held to it from its onset, and the voice table to the limit", () => {
+    // 300 notes at once, held for 0.5 s: the 236 over the limit at their own onset would never
+    // sound, so they go when queued, as upstream; init's released note is cut at the onset.
     const events = [];
-    for (let k = 0; k < 96; ++k)
-      events.push(H.midi.noteOn(0, 0, 20 + k, 100), H.midi.noteOff(480, 0, 20 + k));
-    const { pruned, cut, peak } = play(events);
-    expect(peak).toBe(64);
-    expect(cut).toHaveLength(32);
-    expect(cut.every((c) => c.t === c.start && c.at < c.t)).toBe(true);
-    expect(pruned.filter((p) => p.live)).toEqual([]);
+    for (let k = 0; k < 300; ++k)
+      events.push(H.midi.noteOn(0, 0, 20 + (k % 100), 100), H.midi.noteOff(480, 0, 20 + (k % 100)));
+    const { pruned, cut, peak, queued } = play(events);
+    expect([peak, queued]).toEqual([64, 64]);
+    expect(pruned.filter((p) => !p.started)).toHaveLength(236);
+    expect(cut.every((c) => c.start < c.t && c.at < c.t)).toBe(true); // none at its own onset
   });
 
   test("a caller's notes sent with a future time are limited when sent, as upstream", () => {
@@ -163,6 +163,17 @@ describe.each(variants)("$name: a 1 s lookahead (touch devices)", (variant) => {
     expect(released.map((r) => r.t - start)).toEqual([0.4, 0.5].map((x) => expect.closeTo(x, 9))); // the released note is not released again
     expect(released.every((r) => r.at < r.t)).toBe(true); // sent ahead, within the lookahead
     expect(s.synth.notetab).toEqual([]);
+  });
+
+  test("a Reset All Controllers sent ahead lifts the pedal at its time, releasing what it held", () => {
+    // Note-on at 0, pedal down at 0.1 s, CC123 at 0.2 s, CC121 at 0.3 s, note-off at 0.5 s.
+    const { s, released } = play([
+      H.midi.noteOn(0, 0, 60, 100), { tick: 96, bytes: [0xb0, 64, 127] },
+      { tick: 192, bytes: [0xb0, 123, 0] }, { tick: 288, bytes: [0xb0, 121, 0] }, H.midi.noteOff(480, 0, 60),
+    ]);
+    const start = s.notes.find(([, ch, n]) => ch === 0 && n === 60)[0];
+    expect(released.map((r) => r.t - start)).toEqual([expect.closeTo(0.3, 9)]);
+    expect([s.synth.sustain[0], s.synth.notetab]).toEqual([0, []]);
   });
 
   test("an All Notes Off sent ahead leaves a sustained note to the pedal, as a note-off does", () => {

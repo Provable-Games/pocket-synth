@@ -1233,7 +1233,8 @@ function WebAudioTinySynthCore(target) {
          counts and those over the limit stop now, as upstream, and so does a voice a caller sends
          with a future time (up). For a voice the sequencer queues (_seq) or one sent for now, the
          limit holds at its onset u: the voices sounding then count (k: the rank of the voice at
-         i), and those over the limit stop then: now, as upstream, or at u, cut ahead (_cut). The
+         i), and those over the limit stop then: now, as upstream (also a queued voice whose own onset
+         is u, which would never sound), or at u, cut ahead (_cut). The
          sequencer queues in time order, so its voices are never cut before their time and stay
          within the limit once they start. A live voice held into a later queued onset is counted
          at the next onset queued after it starts, not before (its end is not known yet). A
@@ -1258,7 +1259,7 @@ function WebAudioTinySynthCore(target) {
         if(!on(nt))
           continue;
         if(k>=this.voices){
-          if(u>c)
+          if(u>c && nt.t<u) // a voice over the limit at its own onset never sounds: it goes now
             this._cut(nt,u);
           else{
             this._pruneNote(nt);
@@ -1660,7 +1661,10 @@ function WebAudioTinySynthCore(target) {
             this.allSoundOff(ch);
           break;
         }
-        case 121: this.resetAllControllers(ch); break;
+        case 121: /* reset all controllers: the pedal comes up at t, releasing the voices it held */
+          this.setSustain(ch,0,t);
+          this.resetAllControllers(ch);
+          break;
         }
         break;
       case 0xc0: this.setProgram(ch,msg[1]); break;
