@@ -61,7 +61,7 @@ Settings are changed with the functions below (`setMasterVol()`, `setReverbLev()
 |**loop**           | 0        | loop playMIDI            |
 |**loopEnd**        | 0        | loop length in MIDI ticks; 0 = loop on the last event (see `setLoopEnd()`) |
 |**tsmode**         | 0        | default timestamp mode   |
-|**voices**         | 64       | Max number of simultaneous voices. Large number needs more CPU. On a realtime context, the limit holds when each voice the sequencer queues ahead (`playMIDI()`) starts: those voices are never stolen before they start, and voices over the limit at a later start are cut at that time. Notes you send with a future time count at once and can be stolen before they start, as upstream. |
+|**voices**         | 64       | Max number of simultaneous voices. Large number needs more CPU. On a realtime context, the limit holds when each voice the sequencer queues ahead (`playMIDI()`) starts: those voices are never stolen before they start, and voices over the limit at a later start are cut at that time. A note played live never cuts a queued voice; it counts from the next voice the sequencer queues after it starts. Notes you send with a future time count at once and can be stolen before they start, as upstream. |
 |**seed**           | 0        | seed of the reverb and noise buffers (constructor option, read-only) |
 |**bufferVersion**  | 1        | version of the buffer generation (read-only). A library change that alters the generated buffers increments it. |
 

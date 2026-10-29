@@ -1232,12 +1232,15 @@ function WebAudioTinySynthCore(target) {
       /* Ended voices go, then the limit holds in upstream's order. Offline every scheduled voice
          counts and those over the limit stop now, as upstream, and so does a voice a caller sends
          with a future time (up). For a voice the sequencer queues (_seq) or one sent for now, the
-         limit holds at its onset t and at each later onset queued: the voices sounding at that
-         time u count (k: the rank of the voice at i), and those over the limit stop then: now, as
-         upstream, or at u, cut ahead (_cut). So the sequencer's queued voices are never cut
-         before their time and stay within the limit once they start. A caller's queued voices
-         count at once, as upstream, so the queue stays bounded by the lookahead and the limit. */
-      const c=this.actx.currentTime,a=this.notetab,u0=Math.max(t,c),up=this._off || t>c && !this._seq;
+         limit holds at its onset u: the voices sounding then count (k: the rank of the voice at
+         i), and those over the limit stop then: now, as upstream, or at u, cut ahead (_cut). The
+         sequencer queues in time order, so its voices are never cut before their time and stay
+         within the limit once they start. A live voice held into a later queued onset is counted
+         at the next onset queued after it starts, not before (its end is not known yet). A
+         caller's queued voices count at once, as upstream, so the queue stays bounded by the
+         lookahead and the limit. */
+      const c=this.actx.currentTime,a=this.notetab,up=this._off || t>c && !this._seq,u=up ? c : Math.max(t,c),
+        on=(nt)=>up || nt.t<=u && u<=nt.e && !(nt.x<=u);
       a.sort(function(n1,n2){
         if(n1.f!=n2.f) return n1.f-n2.f;
         if(n1.e!=n2.e) return n2.e-n1.e;
@@ -1249,24 +1252,20 @@ function WebAudioTinySynthCore(target) {
           a.splice(i,1);
         }
       }
-      const at=up ? [c] : [...new Set([u0].concat(a.map(nt=>nt.t).filter(x=>x>u0)))].sort((x,y)=>x-y);
-      for(const u of at){
-        const on=(nt)=>up || nt.t<=u && u<=nt.e && !(nt.x<=u);
-        let k=a.filter(on).length;
-        for(let i=a.length-1;i>=0;--i){
-          var nt=a[i];
-          if(!on(nt))
-            continue;
-          if(k>=this.voices){
-            if(!up && u>c)
-              this._cut(nt,u);
-            else{
-              this._pruneNote(nt);
-              a.splice(i,1);
-            }
+      let k=a.filter(on).length;
+      for(let i=a.length-1;i>=0;--i){
+        var nt=a[i];
+        if(!on(nt))
+          continue;
+        if(k>=this.voices){
+          if(u>c)
+            this._cut(nt,u);
+          else{
+            this._pruneNote(nt);
+            a.splice(i,1);
           }
-          --k;
         }
+        --k;
       }
     },
     _cut:(nt,t)=>{
@@ -1275,13 +1274,15 @@ function WebAudioTinySynthCore(target) {
          once the clock passes t. It stays in notetab until then, so it counts and can be released
          before t; a release keeps the cut (x, _releaseNote). An operator still in its attack at t
          ramps on to its level then, as in _releaseNote: cancelScheduledValues(t) alone would
-         remove the whole ramp and silence it from its onset. */
+         remove the whole ramp and silence it from its onset. The earliest cut holds. */
+      if(nt.x<=t)
+        return;
       nt.x=t;
       nt.e=Math.min(nt.e,t);
       nt.g.forEach((g,k)=>{
         const p=g.gain,e=nt.t2[k];
         p.cancelScheduledValues(t);
-        if(nt.t<t && t<e)
+        if(nt.t<t && t<=e)
           p.linearRampToValueAtTime(nt.v[k]*(t-nt.t)/(e-nt.t),t);
         p.setValueAtTime(0,t);
       });

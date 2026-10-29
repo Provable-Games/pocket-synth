@@ -120,13 +120,21 @@ describe.each(variants)("$name: a 1 s lookahead (touch devices)", (variant) => {
     expect([sounding(synth, 0.5), synth.notetab.length]).toEqual([3, 3]);
   });
 
-  test("started voices are held to the limit now, and with the queued ones once those start", () => {
-    const { synth } = synthFor(variant, { voices: 3 });
+  test("a live note never cuts a queued voice; held into a queued onset, it is counted at the next one", () => {
+    const { synth, env } = synthFor(variant, { voices: 3 });
     synth.preroll = 1;
-    for (let n = 60; n < 63; ++n) synth.noteOn(0, n, 100, 0.5); // queued for 0.5 s
-    for (let n = 70; n < 75; ++n) synth.noteOn(0, n, 100); // sounding now
-    expect([sounding(synth, 0), sounding(synth, 0.5)]).toEqual([3, 3]);
-    expect(synth.notetab.filter((nt) => nt.t > 0).map((nt) => nt.n).sort()).toEqual([60, 61, 62]); // the later onsets win, as upstream
+    synth.loadMIDI(H.toArrayBuffer(H.makeMidi(PPQ, [
+      ...[60, 64, 67].map((n) => H.midi.noteOn(480, 0, n, 100)), H.midi.noteOn(1440, 0, 72, 100),
+      ...[60, 64, 67, 72].map((n) => H.midi.noteOff(1920, 0, n)),
+    ])));
+    synth.playMIDI();
+    env.step(); // the chord at 0.5 s is queued, the note at 1.5 s not yet
+    synth.noteOn(1, 50, 100); // a live note, held
+    const onset = (n) => synth.notetab.find((nt) => nt.n === n).t;
+    expect(synth.notetab.filter((nt) => nt.ch === 0 && nt.x === undefined)).toHaveLength(3); // no chord note is cut for it
+    expect(sounding(synth, onset(60))).toBe(4);
+    H.runUntil(env, () => synth.notetab.some((nt) => nt.n === 72), 2000);
+    expect(sounding(synth, onset(72))).toBe(3);
   });
 
   test("a caller's notes scheduled ahead, within the lookahead or beyond, keep the voice table bounded", () => {
