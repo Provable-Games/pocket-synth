@@ -61,7 +61,7 @@ Settings are changed with the functions below (`setMasterVol()`, `setReverbLev()
 |**loop**           | 0        | loop playMIDI            |
 |**loopEnd**        | 0        | loop length in MIDI ticks; 0 = loop on the last event (see `setLoopEnd()`) |
 |**tsmode**         | 0        | default timestamp mode   |
-|**voices**         | 64       | Max number of simultaneous voices. Large number needs more CPU. On a realtime context only started voices count: voices scheduled ahead are not stolen before they start. |
+|**voices**         | 64       | Max number of simultaneous voices. Large number needs more CPU. On a realtime context the limit holds when each voice starts: voices scheduled ahead are never stolen before they start, and voices over the limit at a later start are cut at that time. |
 |**seed**           | 0        | seed of the reverb and noise buffers (constructor option, read-only) |
 |**bufferVersion**  | 1        | version of the buffer generation (read-only). A library change that alters the generated buffers increments it. |
 
@@ -327,7 +327,7 @@ Almost function has the timestamp, `t` parameter. That specify accurate timing o
 |**100/101**             | Yes      | RPN Index                      |
 |------------------------|----------|--------------------------------|
 |**Channel Mode Message**|          |                                |
-|**120**                 | Yes      | all sound off (sent with a future time: a release at that time, see 123) |
+|**120**                 | Yes      | all sound off. Sent with a future time, it cuts the voices that start by then at that time and keeps later ones; otherwise it stops them at once, as `allSoundOff()` |
 |**121**                 | Yes      | reset all controller           |
 |**123**                 | Yes      | all note off. Sent with a future time, as the sequencer does, it releases the voices that start by then at that time; otherwise it stops them at once, as `allSoundOff()` (also 124–127) |
 |------------------------|----------|--------------------------------|

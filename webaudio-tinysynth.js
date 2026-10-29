@@ -1222,27 +1222,56 @@ function WebAudioTinySynthCore(target) {
       nt.l=nt.o.length;
       this._gone.add(nt);
     },
-    _limitVoices:(ch,n)=>{ // eslint-disable-line no-unused-vars -- callers pass the new note; the limit is global
-      /* On a realtime context only started voices count and can be stolen: one the lookahead
-         queued for later keeps its place, so it is never cut before it sounds. k: the started
-         voices up to i, its rank. Offline every scheduled voice counts, as upstream. */
-      const c=this.actx.currentTime,on=(nt)=>this._off || nt.t<=c;
-      let k=this.notetab.filter(on).length;
-      this.notetab.sort(function(n1,n2){
+    _limitVoices:(ch,n,t)=>{ // eslint-disable-line no-unused-vars -- callers pass the new note; the limit is global
+      /* Ended voices go, then the limit holds in upstream's order. Offline every scheduled voice
+         counts and those over the limit stop now, as upstream. On a realtime context it holds at
+         the new voice's onset t and at each later onset already queued: the voices sounding at
+         that time u count (k: the rank of the voice at i), and those over the limit stop then:
+         now, as upstream, or at u, cut ahead (_cut). So no voice is cut before its time, and
+         queued voices stay within the limit once they start. */
+      const c=this.actx.currentTime,a=this.notetab,u0=Math.max(t,c);
+      a.sort(function(n1,n2){
         if(n1.f!=n2.f) return n1.f-n2.f;
         if(n1.e!=n2.e) return n2.e-n1.e;
         return n2.t-n1.t;
       });
-      for(let i=this.notetab.length-1;i>=0;--i){
-        var nt=this.notetab[i];
-        if(!on(nt))
-          continue;
-        if(c>nt.e || k>=this.voices){
-          this._pruneNote(nt);
-          this.notetab.splice(i,1);
+      for(let i=a.length-1;i>=0;--i){
+        if(c>a[i].e){
+          this._pruneNote(a[i]);
+          a.splice(i,1);
         }
-        --k;
       }
+      const at=this._off ? [c] : [...new Set([u0].concat(a.map(nt=>nt.t).filter(x=>x>u0)))].sort((x,y)=>x-y);
+      for(const u of at){
+        const on=(nt)=>this._off || nt.t<=u && u<=nt.e && !(nt.x<=u);
+        let k=a.filter(on).length;
+        for(let i=a.length-1;i>=0;--i){
+          var nt=a[i];
+          if(!on(nt))
+            continue;
+          if(k>=this.voices){
+            if(u>c)
+              this._cut(nt,u);
+            else{
+              this._pruneNote(nt);
+              a.splice(i,1);
+            }
+          }
+          --k;
+        }
+      }
+    },
+    _cut:(nt,t)=>{
+      /* Silence a voice at t, a future time (a steal at a later onset, or a timed All Sound Off):
+         its gain drops to 0 and it ends (e) then, so the limit stops counting it, and it is pruned
+         once the clock passes t. It stays in notetab until then, so it counts and can be released
+         before t; a release keeps the cut (x, _releaseNote). */
+      nt.x=t;
+      nt.e=Math.min(nt.e,t);
+      nt.g.forEach(g=>{
+        g.gain.cancelScheduledValues(t);
+        g.gain.setValueAtTime(0,t);
+      });
     },
     _filter:(pn,f,out)=>{
       /* An audio-output operator's fixed filter (#27), connected to out and
@@ -1285,7 +1314,7 @@ function WebAudioTinySynthCore(target) {
         if(![fp[i]/b[i],fp[i]/b[i]*pn.p,vp[i],pn.s*vp[i]].every(f32))
           return;
       }
-      this._limitVoices(ch,n);
+      this._limitVoices(ch,n,t);
       const q=[]; // the output operators' filters, by operator (#27)
       for(let i=0;i<p.length;++i){
         pn=p[i];
@@ -1360,7 +1389,7 @@ function WebAudioTinySynthCore(target) {
         p.setValueAtTime(v,t);
     },
     _releaseNote:(nt,t)=>{
-      if(nt.ch!=9){
+      if(nt.ch!=9 && !(nt.x<=t)){ // a voice cut ahead (x, _cut) is silent from then
         for(let k=nt.g.length-1;k>=0;--k){
           /* An operator whose attack (ending at e) has not ended at t (#59) ramps on to its
              own level at t, v*(t-nt.t)/a, and is released from there. With a = 0 (e is the
@@ -1378,9 +1407,11 @@ function WebAudioTinySynthCore(target) {
             nt.t2[k]=t;
           }
           this._setParamTarget(g,0,t,nt.r[k]);
+          if(nt.x)
+            g.setValueAtTime(0,nt.x);
         }
       }
-      nt.e=t+nt.r[0]*this.releaseRatio;
+      nt.e=Math.min(t+nt.r[0]*this.releaseRatio,nt.x||1/0);
       nt.f=1;
     },
     setModulation:(ch,v,t)=>{
@@ -1594,13 +1625,14 @@ function WebAudioTinySynthCore(target) {
         case 123:  /* all notes off */
         case 124: case 125: case 126: case 127: { /* omni off/on mono/poly */
           /* Sent ahead (the sequencer's lookahead, or a caller's future time): the channel's
-             voices that start by then are released at that time, as by note-offs, and later ones
-             are kept. Otherwise every voice of the channel stops now, as upstream. */
+             voices that start by then stop at that time (120), or are released then, as by
+             note-offs; later ones are kept. Otherwise every voice of the channel stops now, as
+             upstream. */
           const u=this._tsConv(t);
           if(u>this.actx.currentTime){
-            for(const nt of this.notetab)
+            for(const nt of this.notetab.slice())
               if(nt.ch==ch && u>=nt.s)
-                this._releaseNote(nt,Math.max(u,nt.t));
+                msg[1]==120 ? this._cut(nt,u) : this._releaseNote(nt,Math.max(u,nt.t));
           }
           else
             this.allSoundOff(ch);
