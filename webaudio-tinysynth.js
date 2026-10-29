@@ -511,7 +511,12 @@ function WebAudioTinySynthCore(target) {
         this.rhythm[i]=0;
       }
       this.rhythm[9]=1;
+      /* Touch devices get a 1 s lookahead: their main thread can stall past 0.2 s, and late notes pop. */
       this.preroll=0.2;
+      try{
+        if(typeof window.matchMedia=="function" && window.matchMedia("(pointer: coarse)").matches)
+          this.preroll=1;
+      }catch(e){ /* no window or media queries: keep 0.2 s */ }
       this.relcnt=0;
       /* Lifecycle (#11, #12): the installed context, whether the synth created it (_own), the
          one-shot sources (percussion hits and playMIDI's start-up oscillator, kept until they
@@ -606,7 +611,13 @@ function WebAudioTinySynthCore(target) {
          its graph was installed is torn down and released (_drop), so the synth is left without a
          context, nothing stays open or referenced, and the error propagates; the next use retries. */
       window.AudioContext = window.AudioContext || window.webkitAudioContext;
-      const c=new AudioContext();
+      /* A larger output buffer than the default: a phone underruns (clicks) on the smallest one. */
+      let c;
+      try{
+        c=new AudioContext({latencyHint:"playback"});
+      }catch(e){
+        c=new AudioContext();
+      }
       try{
         this.setAudioContext(c);
       }catch(e){

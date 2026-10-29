@@ -22,6 +22,8 @@ Modifications by Provable Games, based on upstream commit
     synth-owned contexts. Stop, seek and song replacement cancel drums and queued controllers.
     Rejected realtime sequencing on OfflineAudioContext and handled
     resume promise failures.
+  - Synth-owned contexts request latencyHint "playback"; the realtime
+    lookahead (preroll) is 1 s on coarse-pointer (touch) devices.
   - Added autoResume (default true) for application-controlled audio
     startup: with false, send() does not resume suspended/interrupted
     contexts and the sequencer waits until its context runs. Explicit

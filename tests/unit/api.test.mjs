@@ -940,5 +940,39 @@ for (const variant of variants) {
       expect([s.synth.getAudioContext() !== null, tick(s)]).toEqual([true, 1920]);
     });
   });
+
+  describe(variant.name + ": phone playback (larger output buffer, longer lookahead)", () => {
+    /* A synth on a fresh environment; `setup(sandbox)` runs before the library is loaded. */
+    function build(setup) {
+      const env = H.createEnvironment([]);
+      if (setup) setup(env.sandbox);
+      vm.runInContext(variant.source, env.sandbox, { filename: variant.name });
+      return new env.sandbox.WebAudioTinySynth();
+    }
+    const media = (matches) => (sandbox) => { sandbox.matchMedia = (q) => ({ media: q, matches: q === "(pointer: coarse)" && matches }); };
+
+    test("the synth's own context asks for the playback latency hint", () => {
+      const made = [];
+      build((sandbox) => { const Base = sandbox.AudioContext; sandbox.AudioContext = class extends Base { constructor(...args) { super(); made.push(args); } }; });
+      expect(made).toEqual([[{ latencyHint: "playback" }]]);
+    });
+
+    test("an engine that rejects context options gets a default context", () => {
+      const made = [];
+      const s = build((sandbox) => {
+        const Base = sandbox.AudioContext;
+        sandbox.AudioContext = class extends Base { constructor(...args) { if (args.length) throw new TypeError("no options"); super(); made.push(args); } };
+      });
+      expect(made).toEqual([[]]);
+      expect(s.getAudioContext()).not.toBe(null);
+    });
+
+    test("the lookahead is 0.2 s, and 1 s on a coarse pointer (a phone or tablet)", () => {
+      expect(build().preroll).toBe(0.2);
+      expect(build(media(false)).preroll).toBe(0.2);
+      expect(build(media(true)).preroll).toBe(1);
+      expect(build((sandbox) => { sandbox.matchMedia = () => { throw new Error("no media queries"); }; }).preroll).toBe(0.2);
+    });
+  });
 }
 
