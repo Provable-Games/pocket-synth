@@ -144,8 +144,10 @@ function createEnvironment(trace) {
   let nextNode = 1;
   const rec = (...a) => trace.push(JSON.stringify(a));
 
+  /* automationRate is a plain property at the Web Audio default, not a recorded call: the trace
+     stays comparable with upstream's, and tests read the rate on the nodes. */
   class AudioParam {
-    constructor(id, v) { this._id = id; this._v = v; }
+    constructor(id, v) { this._id = id; this._v = v; this.automationRate = "a-rate"; }
     get value() { return this._v; }
     set value(v) { this._v = v; rec("value", this._id, v); }
     setValueAtTime(v, t) { rec("setValueAtTime", this._id, v, t); return this; }

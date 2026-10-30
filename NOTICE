@@ -28,6 +28,8 @@ Modifications by Provable Games, based on upstream commit
     at their start times, and channel mode messages sent with a future
     time act at that time (CC120 cuts, CC123-127 act as note-offs).
     CC121 also lifts the sustain pedal, releasing the voices it held.
+  - Oscillator detune (bend and vibrato) is k-rate, computed once per
+    render quantum.
   - Added autoResume (default true) for application-controlled audio
     startup: with false, send() does not resume suspended/interrupted
     contexts and the sequencer waits until its context runs. Explicit
