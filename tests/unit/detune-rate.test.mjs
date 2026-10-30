@@ -70,7 +70,7 @@ describe.each(variants)("$name", (variant) => {
       expect(dummy).toBeDefined();
       expect(s.oscs).toContain(s.synth.lfo);
       const connected = connectedParams(s.trace);
-      for (const o of s.oscs) expect([o.detune.automationRate, connected.has(o.detune._id)]).toEqual(connected.has(o.detune._id) ? ["k-rate", true] : ["a-rate", false]);
+      for (const o of s.oscs) expect(o.detune.automationRate).toBe(connected.has(o.detune._id) ? "k-rate" : "a-rate");
       expect([s.synth.lfo.detune.automationRate, dummy.detune.automationRate]).toEqual(["a-rate", "a-rate"]);
       expect(connectedParams(s.trace, from).size).toBeGreaterThan(0);
     });
