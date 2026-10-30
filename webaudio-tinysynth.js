@@ -1222,7 +1222,7 @@ function WebAudioTinySynthCore(target) {
       nt.l=nt.o.length;
       this._gone.add(nt);
     },
-    _limitVoices:(ch,n,t)=>{ // eslint-disable-line no-unused-vars -- callers pass the new note; the limit is global
+    _limitVoices:(ch,n,t)=>{ // callers pass the new note; the limit is global
       /* Ended voices go, then the limit holds in upstream's order. Offline every scheduled voice
          counts and those over the limit stop now, as upstream, and so does a voice a caller sends
          with a future time (up). For a voice the sequencer queues (_seq) or one sent for now, the
@@ -1354,6 +1354,12 @@ function WebAudioTinySynthCore(target) {
           else
             o[i].type=pn.w;
           if (o[i].detune) {
+            /* k-rate: the vibrato input and bend are summed once per 128-frame render quantum.
+               A connected a-rate detune costs Chromium per-sample work on every voice, even at CC1 0. */
+            try {
+              o[i].detune.automationRate="k-rate";
+            }
+            catch(e){ /* a fixed rate: detune stays a-rate. Without automationRate (Firefox) this sets a plain property */ }
             this.chmod[ch].connect(o[i].detune);
             o[i].detune.value=this.bend[ch];
           }
