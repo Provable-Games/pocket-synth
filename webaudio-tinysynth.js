@@ -511,14 +511,14 @@ function WebAudioTinySynthCore(target) {
         this.rhythm[i]=0;
       }
       this.rhythm[9]=1;
-      /* Touch devices get a 1 s lookahead and a larger output buffer (_create): their main thread
-         can stall past 0.2 s, and late notes pop. matchMedia is the global, as AudioContext is:
-         under CommonJS, window is module.exports. */
+      /* Touch devices get a 1 s lookahead: their main thread can stall past 0.2 s, and late notes
+         pop. Their context stays a default one (_create): on Android phones, latencyHint "playback"
+         crackled under load. matchMedia is the global, as AudioContext is: under CommonJS, window
+         is module.exports. */
       this.preroll=0.2;
-      this._touch=0;
       try{
         if(typeof matchMedia=="function" && matchMedia("(pointer: coarse)").matches)
-          this.preroll=this._touch=1;
+          this.preroll=1;
       }catch(e){ /* no media queries: keep 0.2 s */ }
       this.relcnt=0;
       /* Lifecycle (#11, #12): the installed context, whether the synth created it (_own), the
@@ -620,13 +620,7 @@ function WebAudioTinySynthCore(target) {
          its graph was installed is torn down and released (_drop), so the synth is left without a
          context, nothing stays open or referenced, and the error propagates; the next use retries. */
       window.AudioContext = window.AudioContext || window.webkitAudioContext;
-      /* On a touch device (init), a larger output buffer than the default: a phone underruns
-         (clicks) on the smallest one. Elsewhere the default keeps live playing responsive. */
-      let c;
-      try{
-        c=this._touch && new AudioContext({latencyHint:"playback"});
-      }catch(e){ /* an engine that rejects context options: a default context */ }
-      c=c||new AudioContext();
+      const c=new AudioContext();
       try{
         this.setAudioContext(c);
       }catch(e){

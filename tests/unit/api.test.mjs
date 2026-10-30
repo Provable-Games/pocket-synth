@@ -941,7 +941,7 @@ for (const variant of variants) {
     });
   });
 
-  describe(variant.name + ": phone playback (larger output buffer, longer lookahead)", () => {
+  describe(variant.name + ": phone playback (default output buffer, longer lookahead)", () => {
     /* A synth on a fresh environment; `setup(sandbox)` runs before the library is loaded. With
        cjs, the library is loaded as Node's require() does: `this` is module.exports. */
     function build(setup, cjs) {
@@ -962,30 +962,19 @@ for (const variant of variants) {
       sandbox.AudioContext = class extends Base { constructor(...args) { super(); made.push(args); } };
     };
 
-    test("on a coarse pointer, the synth's own context asks for the playback latency hint; elsewhere a default context", () => {
+    test("on a coarse pointer, the synth's own context is a default context (no options), as elsewhere", () => {
       const touch = [], desk = [], none = [];
       build(recordContexts(touch, media(true)));
       build(recordContexts(desk, media(false)));
       build(recordContexts(none));
-      expect([touch, desk, none]).toEqual([[[{ latencyHint: "playback" }]], [[]], [[]]]);
-    });
-
-    test("an engine that rejects context options gets a default context", () => {
-      const made = [];
-      const s = build((sandbox) => {
-        media(true)(sandbox);
-        const Base = sandbox.AudioContext;
-        sandbox.AudioContext = class extends Base { constructor(...args) { if (args.length) throw new TypeError("no options"); super(); made.push(args); } };
-      });
-      expect(made).toEqual([[]]);
-      expect(s.getAudioContext()).not.toBe(null);
+      expect([touch, desk, none]).toEqual([[[]], [[]], [[]]]);
     });
 
     test("loaded through CommonJS, a coarse pointer is still detected (window there is module.exports)", () => {
       const made = [];
       expect(build(recordContexts(made, media(true)), true).preroll).toBe(1);
       expect(build(media(false), true).preroll).toBe(0.2);
-      expect(made).toEqual([[{ latencyHint: "playback" }]]);
+      expect(made).toEqual([[]]);
     });
 
     test("the lookahead is 0.2 s, and 1 s on a coarse pointer (a phone or tablet)", () => {
