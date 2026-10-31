@@ -387,7 +387,7 @@ Use the Timbre Editor in `soundedit.html` to audition parameters and generate a 
 
 ## Development and testing
 
-Use the Node version in [.nvmrc](.nvmrc) and `npm ci` to install locked development tools. The runtime library has no dependencies. Test runners use POSIX process groups and run on Linux/macOS.
+Use the Node version in [.nvmrc](.nvmrc) and `npm ci` to install locked development tools. The runtime library has no dependencies. Test runners use POSIX process groups and run on Linux/macOS. Native release-provenance tests require Git and GnuPG (`gpg`/`gpgconf`) on PATH; they create temporary test keys without using your signing identity.
 
 | Command | Purpose |
 | --- | --- |
@@ -420,5 +420,28 @@ To verify an embedded copy, check out a release tag or CI rebuild commit with fu
 Releases are manual:
 
 1. Use the integration-to-main PR if it already contains the release version and fresh generated files. Otherwise, create `release/vX.Y.Z` from `main`, set the version with `npm version X.Y.Z --no-git-tag-version`, run `npm run build`, commit the generated files, and open a PR into `main`.
-2. After the release PR passes checks and the maintainer merges it, verify the clean merge with `npm ci` and `npm run verify`. The maintainer signs and pushes the tag: `git tag -s vX.Y.Z <merge-sha>` and `git push origin vX.Y.Z`.
-3. From the tag, the maintainer publishes with `gh release create vX.Y.Z webaudio-tinysynth.min.js webaudio-tinysynth.min.js.map`, including sizes and SHA-256 from `npm run size` in the notes. Focused listening is part of normal release checks.
+2. After the release PR passes checks and the maintainer merges it, use the exact Node in `.nvmrc`, run `npm ci`, and verify the clean merge with `npm run verify`. Sign an annotated tag at that merge: `git tag -s vX.Y.Z <merge-sha>`. Never reuse a published version or move its tag.
+3. Check out the signed tag and prepare a **new** upload directory:
+
+   ```sh
+   git checkout --detach vX.Y.Z
+   npm ci
+   npm run --silent release:prepare -- vX.Y.Z --output /tmp/pocket-synth-vX.Y.Z
+   (cd /tmp/pocket-synth-vX.Y.Z && sha256sum -c SHA256SUMS)
+   ```
+
+   On macOS, use `shasum -a 256 -c SHA256SUMS` for the checksum command. The native tests verify checksums with Node and need no GNU coreutils.
+
+   This requires a clean tracked tree at the signed tag, matching package/lock versions and the pinned Node. It verifies the GPG signature and reproduces both distribution files with the tagged recipe. It emits `release-manifest.json` binding the tag object, commit, signer fingerprint, source, recipe, lockfile, compiler, distributions and licenses; `SHA256SUMS` covers the distributions, both licenses and the manifest. Existing output directories and assets changed after verification are rejected. For auditing an older tag, the helper can run outside it with `--repo <clean-tag-checkout>`; it never fetches, tags, pushes or publishes.
+4. Review the manifest and signer fingerprint against the maintainer's published signing identity, then push the tag. Create a **draft**, upload the complete bundle and inspect it before publication:
+
+   ```sh
+   git push origin vX.Y.Z
+   gh release create vX.Y.Z /tmp/pocket-synth-vX.Y.Z/* --verify-tag --draft --title vX.Y.Z --notes-file <reviewed-release-notes>
+   gh release edit vX.Y.Z --draft=false
+   gh release verify vX.Y.Z --repo Provable-Games/pocket-synth
+   ```
+
+   Immutable releases are enabled for future publications: assets must be complete before leaving draft. The active version-tag ruleset prevents updates/deletion of `v*` tags and permits creation. Fix a published artifact in a new version. These repository settings are maintained separately from Git; read them back when auditing release policy. Existing releases such as `v2.1.2` predate immutability and retain their original assets; their published digests, signed tag and a reproducible rebuild remain the verification evidence. Do not delete/recreate old releases to retrofit this bundle.
+
+Focused listening is part of normal release checks. Consumers should pin the full tag commit and artifact SHA-256, not a branch or an unverified tag name. GitHub release attestation verification complements the deterministic build and signed-tag checks; see [immutable releases](https://docs.github.com/en/code-security/concepts/supply-chain-security/immutable-releases).
