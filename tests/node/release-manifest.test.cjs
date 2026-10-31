@@ -4,6 +4,7 @@ const { test } = require("node:test");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+const { createHash } = require("node:crypto");
 const { execFileSync, spawnSync } = require("node:child_process");
 const { releaseManifest, writeBundle } = require("../../scripts/release-manifest");
 const ROOT = path.resolve(__dirname, "../..");
@@ -58,7 +59,13 @@ test("signed clean release produces reproducible identities and a checksum-bound
   const output = path.join(f.dir, "upload");
   writeBundle(f.repo, output, manifest);
   assert.deepEqual(fs.readdirSync(output).sort(), ["LICENSE", "NOTICE", "SHA256SUMS", "release-manifest.json", "webaudio-tinysynth.min.js", "webaudio-tinysynth.min.js.map"].sort());
-  execFileSync("sha256sum", ["-c", "SHA256SUMS"], { cwd: output, stdio: "pipe" });
+  const checksums = fs.readFileSync(path.join(output, "SHA256SUMS"), "utf8").trimEnd().split("\n").map((line) => {
+    const match = /^([a-f0-9]{64}) {2}(.+)$/.exec(line);
+    assert.ok(match, "standard checksum line: " + line);
+    assert.equal(createHash("sha256").update(fs.readFileSync(path.join(output, match[2]))).digest("hex"), match[1]);
+    return match[2];
+  });
+  assert.deepEqual(checksums.sort(), fs.readdirSync(output).filter((file) => file !== "SHA256SUMS").sort());
   assert.throws(() => writeBundle(f.repo, output, manifest), /EEXIST/);
   fs.appendFileSync(path.join(f.repo, "NOTICE"), "changed");
   assert.throws(() => releaseManifest({ repo: f.repo, tag: "v9.8.7", env: f.env }), /tracked changes/);

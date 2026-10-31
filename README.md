@@ -387,7 +387,7 @@ Use the Timbre Editor in `soundedit.html` to audition parameters and generate a 
 
 ## Development and testing
 
-Use the Node version in [.nvmrc](.nvmrc) and `npm ci` to install locked development tools. The runtime library has no dependencies. Test runners use POSIX process groups and run on Linux/macOS.
+Use the Node version in [.nvmrc](.nvmrc) and `npm ci` to install locked development tools. The runtime library has no dependencies. Test runners use POSIX process groups and run on Linux/macOS. Native release-provenance tests require Git and GnuPG (`gpg`/`gpgconf`) on PATH; they create temporary test keys without using your signing identity.
 
 | Command | Purpose |
 | --- | --- |
@@ -429,6 +429,8 @@ Releases are manual:
    npm run --silent release:prepare -- vX.Y.Z --output /tmp/pocket-synth-vX.Y.Z
    (cd /tmp/pocket-synth-vX.Y.Z && sha256sum -c SHA256SUMS)
    ```
+
+   On macOS, use `shasum -a 256 -c SHA256SUMS` for the checksum command. The native tests verify checksums with Node and need no GNU coreutils.
 
    This requires a clean tracked tree at the signed tag, matching package/lock versions and the pinned Node. It verifies the GPG signature and reproduces both distribution files with the tagged recipe. It emits `release-manifest.json` binding the tag object, commit, signer fingerprint, source, recipe, lockfile, compiler, distributions and licenses; `SHA256SUMS` covers the distributions, both licenses and the manifest. Existing output directories and assets changed after verification are rejected. For auditing an older tag, the helper can run outside it with `--repo <clean-tag-checkout>`; it never fetches, tags, pushes or publishes.
 4. Review the manifest and signer fingerprint against the maintainer's published signing identity, then push the tag. Create a **draft**, upload the complete bundle and inspect it before publication:
