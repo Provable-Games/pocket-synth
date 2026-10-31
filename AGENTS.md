@@ -23,6 +23,8 @@ npm run test:browser
 npm run pack:check
 ```
 
+For a maintainer's clean signed release tag, `npm run release:prepare -- vX.Y.Z --output <new-directory>` verifies the signature, pinned build and version before producing upload assets, `release-manifest.json` and `SHA256SUMS`. Follow README's draft-first publication steps; do not move existing tags or replace published assets. The helper can audit a historical checkout with `--repo <path>` without changing it.
+
 Run checks proportionate to the changed behavior. Use `npm run test:unit`, `npm run test:node` or `npm run test:regression` for individual suites; see README for [browser commands](README.md#development-and-testing) and [release verification](README.md#distribution-verification-and-releases). Regressions require full Git history or `TINYSYNTH_REFERENCE`. Browser tools use the locked Playwright version; respect shared read-only browser installs and host coordination when present. Browser servers default to ephemeral ports.
 
 Tests build fresh minified output under ignored `.build/`; `node scripts/test-build.js` refreshes it for direct test-file runs. `TINYSYNTH_MIN` selects another build. `node_modules/` and `tmp/` are also ignored. Test runners fail on empty/incomplete suites and enforce `package.json` file/test floors; raise floors to actual printed counts when adding tests.
