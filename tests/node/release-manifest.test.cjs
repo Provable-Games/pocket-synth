@@ -8,7 +8,7 @@ const { execFileSync, spawnSync } = require("node:child_process");
 const { releaseManifest, writeBundle } = require("../../scripts/release-manifest");
 const ROOT = path.resolve(__dirname, "../..");
 
-async function fixture(t, stale = false) {
+async function fixture(t, { stale = false, mutateAfterVerify = false } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pocket-release-test-"));
   const repo = path.join(dir, "repo");
   const home = path.join(dir, "gpg");
@@ -23,6 +23,9 @@ async function fixture(t, stale = false) {
   const fingerprint = execFileSync("gpg", ["--with-colons", "--list-secret-keys"], { env, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).split("\n").find((line) => line.startsWith("fpr:")).split(":")[9];
   fs.mkdirSync(path.join(repo, "scripts"));
   for (const file of ["scripts/build.js", "scripts/verify-dist.js", "scripts/size.js", "LICENSE", "NOTICE"]) fs.copyFileSync(path.join(ROOT, file), path.join(repo, file));
+  // A deterministic concurrent-writer stand-in: the real verifier succeeds,
+  // then its exit handler changes the asset before the parent reads it again.
+  if (mutateAfterVerify) fs.appendFileSync(path.join(repo, "scripts/verify-dist.js"), '\nprocess.on("exit", (code) => { if (!code) require("fs").appendFileSync(require("path").join(__dirname, "../webaudio-tinysynth.min.js"), "/* changed after verify */"); });\n');
   const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json")));
   const lock = JSON.parse(fs.readFileSync(path.join(ROOT, "package-lock.json")));
   pkg.version = lock.version = lock.packages[""].version = "9.8.7";
@@ -75,6 +78,11 @@ test("unsigned, lightweight, wrong-version and non-tag checkouts cannot pass rel
 });
 
 test("a signed tag with stale committed distribution files is rejected by the actual pinned build", async (t) => {
-  const f = await fixture(t, true);
+  const f = await fixture(t, { stale: true });
   assert.throws(() => releaseManifest({ repo: f.repo, tag: "v9.8.7", env: f.env }), /Command failed/);
+});
+
+test("a distribution changed after its byte comparison cannot become the manifest snapshot", async (t) => {
+  const f = await fixture(t, { mutateAfterVerify: true });
+  assert.throws(() => releaseManifest({ repo: f.repo, tag: "v9.8.7", env: f.env }), /file changed during verification/);
 });

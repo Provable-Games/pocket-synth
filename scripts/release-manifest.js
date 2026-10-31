@@ -34,16 +34,23 @@ function releaseManifest({ repo = ROOT, tag, env = process.env }) {
   if (lock.version !== pkg.version || lock.packages[""].version !== pkg.version) throw new Error("package-lock version differs from the release");
   const node = fs.readFileSync(path.join(repo, ".nvmrc"), "utf8").trim().replace(/^v/, "");
   if (process.version !== "v" + node) throw new Error("use the release's .nvmrc Node version: " + node);
-  // The tagged recipe checks the installed compiler and compares both outputs
-  // byte for byte, including inline safety. Its output is diagnostic, not JSON.
-  execFileSync(process.execPath, [path.join(repo, "scripts/verify-dist.js")], {
-    cwd: repo, env, stdio: ["ignore", "pipe", "pipe"], maxBuffer: 1 << 24,
-  });
+  // Bind the bundle to the clean snapshot that is about to be verified, rather
+  // than accepting new bytes written by another process during verification.
   const files = {};
   for (const file of [...ASSETS, ...INPUTS]) {
     const bytes = fs.readFileSync(path.join(repo, file));
     files[file] = { bytes: bytes.length, sha256: sha256(bytes) };
   }
+  // The tagged recipe checks the installed compiler and compares both outputs
+  // byte for byte, including inline safety. Its output is diagnostic, not JSON.
+  execFileSync(process.execPath, [path.join(repo, "scripts/verify-dist.js")], {
+    cwd: repo, env, stdio: ["ignore", "pipe", "pipe"], maxBuffer: 1 << 24,
+  });
+  for (const [file, expected] of Object.entries(files)) {
+    const bytes = fs.readFileSync(path.join(repo, file));
+    if (bytes.length !== expected.bytes || sha256(bytes) !== expected.sha256) throw new Error("release file changed during verification: " + file);
+  }
+  if (git("status", "--porcelain", "--untracked-files=no")) throw new Error("release checkout has tracked changes after verification");
   return {
     schema: "pocket-synth-release/v1", version: pkg.version, tag,
     commit, tagObject: git("rev-parse", ref),
